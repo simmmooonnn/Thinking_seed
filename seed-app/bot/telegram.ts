@@ -14,3 +14,31 @@ async function call<T>(token: string, method: string, body?: unknown): Promise<T
 export function getMe(token: string) {
   return call<{ id: number; username: string }>(token, "getMe");
 }
+
+export interface Update {
+  update_id: number;
+  message?: {
+    from?: { id: number };
+    chat: { id: number };
+    text?: string;
+    voice?: { file_id: string };
+    entities?: { type: string }[];
+  };
+}
+
+export function getUpdates(token: string, offset?: number) {
+  return call<Update[]>(token, "getUpdates", { offset, timeout: 30 });
+}
+
+export async function sendMessage(token: string, chatId: number, text: string) {
+  await call(token, "sendMessage", { chat_id: chatId, text });
+}
+
+export function getFile(token: string, fileId: string) {
+  return call<{ file_path: string }>(token, "getFile", { file_id: fileId });
+}
+
+export async function downloadFile(token: string, filePath: string): Promise<Buffer> {
+  const res = await fetch(`https://api.telegram.org/file/bot${token}/${filePath}`);
+  return Buffer.from(await res.arrayBuffer());
+}
