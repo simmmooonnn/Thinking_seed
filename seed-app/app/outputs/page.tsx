@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 import WeeklyPanel from "@/app/ui/WeeklyPanel";
 import ReviewForm from "@/app/ui/ReviewForm";
 import DiscoverLinks from "@/app/ui/DiscoverLinks";
@@ -7,7 +8,9 @@ import DiscoverLinks from "@/app/ui/DiscoverLinks";
 export const dynamic = "force-dynamic";
 
 export default async function OutputsPage() {
+  const user = await getCurrentUser();
   const threads = await prisma.thread.findMany({
+    where: { userId: user.id },
     orderBy: { updatedAt: "desc" },
     include: { _count: { select: { entries: true } } },
   });

@@ -610,7 +610,7 @@ export async function deleteThread(threadId: string) {
   const user = await getCurrentUser();
   const t = await prisma.thread.findFirst({ where: { id: threadId, userId: user.id } });
   if (!t) return;
-  await prisma.entry.updateMany({ where: { threadId }, data: { threadId: null } });
+  await prisma.entry.updateMany({ where: { threadId, userId: user.id }, data: { threadId: null } });
   await prisma.threadLink.deleteMany({
     where: { userId: user.id, OR: [{ aId: threadId }, { bId: threadId }] },
   });

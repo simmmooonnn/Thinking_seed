@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 import Cloud, { type GNode, type GLink } from "./ui/Cloud";
 import CaptureBar from "./ui/CaptureBar";
 import ResurfaceCard, { type ResurfaceItem } from "./ui/ResurfaceCard";
@@ -19,20 +20,22 @@ const STATUS_COLOR: Record<string, string> = {
 const DORMANT_DAYS = 4;
 
 export default async function Home() {
+  const user = await getCurrentUser();
   const [threads, entries, threadLinks] = await Promise.all([
     prisma.thread.findMany({
+      where: { userId: user.id },
       orderBy: { updatedAt: "desc" },
       include: {
         _count: { select: { entries: true } },
         versions: { orderBy: { createdAt: "asc" }, select: { claim: true } },
       },
     }),
-    prisma.entry.findMany({ orderBy: { createdAt: "asc" } }),
-    prisma.threadLink.findMany(),
+    prisma.entry.findMany({ where: { userId: user.id }, orderBy: { createdAt: "asc" } }),
+    prisma.threadLink.findMany({ where: { userId: user.id } }),
   ]);
 
   const challenges = await prisma.challenge.findMany({
-    where: { dismissed: false },
+    where: { dismissed: false, thread: { userId: user.id } },
     orderBy: { createdAt: "desc" },
     include: { thread: { select: { id: true, title: true } } },
   });

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 import { addEntryToThread } from "@/app/actions";
 import CaptureBox from "@/app/ui/CaptureBox";
 import EntryCard from "@/app/ui/EntryCard";
@@ -19,9 +20,10 @@ export default async function ThreadPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const user = await getCurrentUser();
 
-  const thread = await prisma.thread.findUnique({
-    where: { id },
+  const thread = await prisma.thread.findFirst({
+    where: { id, userId: user.id },
     include: {
       entries: { orderBy: { createdAt: "asc" } },
       versions: { orderBy: { createdAt: "asc" } },

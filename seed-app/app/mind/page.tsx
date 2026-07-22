@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 import ReflectButton from "@/app/ui/ReflectButton";
 import MainlinesButton from "@/app/ui/MainlinesButton";
 import ContradictionsButton from "@/app/ui/ContradictionsButton";
@@ -13,10 +14,11 @@ export const dynamic = "force-dynamic";
 const HUMAN = ["observation", "judgment", "question", "hypothesis", "decision"];
 
 export default async function MindPage() {
+  const user = await getCurrentUser();
   const [entries, threads, links] = await Promise.all([
-    prisma.entry.findMany({ select: { kind: true, createdAt: true } }),
-    prisma.thread.findMany({ include: { entries: { select: { kind: true } } } }),
-    prisma.threadLink.findMany(),
+    prisma.entry.findMany({ where: { userId: user.id }, select: { kind: true, createdAt: true } }),
+    prisma.thread.findMany({ where: { userId: user.id }, include: { entries: { select: { kind: true } } } }),
+    prisma.threadLink.findMany({ where: { userId: user.id } }),
   ]);
 
   // 近 8 周の週次バケット

@@ -1,5 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 import { challengeClaim, findContradictions, recommendReading } from "@/lib/ai";
 
 export const runtime = "nodejs";
@@ -20,16 +21,17 @@ export async function POST() {
 }
 
 async function run() {
+  const user = await getCurrentUser();
   let generated = 0;
 
   const threads = await prisma.thread.findMany({
-    where: { status: { not: "archived" }, claim: { not: null } },
+    where: { userId: user.id, status: { not: "archived" }, claim: { not: null } },
     orderBy: { updatedAt: "desc" },
     select: { id: true, title: true, claim: true },
   });
 
   const withCh = new Set(
-    (await prisma.challenge.findMany({ where: { dismissed: false }, select: { threadId: true } })).map((c) => c.threadId),
+    (await prisma.challenge.findMany({ where: { dismissed: false, thread: { userId: user.id } }, select: { threadId: true } })).map((c) => c.threadId),
   );
 
   // 1) 一条未挑战线程 → 联网证据
@@ -46,7 +48,7 @@ async function run() {
 
   // 3) 一条未推荐线程 → 联网推荐阅读
   const withR = new Set(
-    (await prisma.reading.findMany({ where: { dismissed: false }, select: { threadId: true } })).map((r) => r.threadId),
+    (await prisma.reading.findMany({ where: { dismissed: false, thread: { userId: user.id } }, select: { threadId: true } })).map((r) => r.threadId),
   );
   const readTarget = threads.find((t) => !withR.has(t.id));
 
@@ -58,7 +60,7 @@ async function run() {
       if (!A || !B) continue;
       const text = `与「${B.title}」冲突:${p.reason}`;
       const dup = await prisma.challenge.findFirst({
-        where: { threadId: A.id, stance: "contradiction", text: { contains: `与「${B.title}」冲突` } },
+        where: { threadId: A.id, stance: "contradiction", text: { contains: `与「${B.title}」冲突` }, thread: { userId: user.id } },
       });
       if (dup) continue;
       await prisma.challenge.create({ data: { threadId: A.id, stance: "contradiction", text } });

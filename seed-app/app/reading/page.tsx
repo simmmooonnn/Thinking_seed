@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 import ReadingButton from "@/app/ui/ReadingButton";
 import DismissReading from "@/app/ui/DismissReading";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReadingPage() {
+  const user = await getCurrentUser();
   const threads = await prisma.thread.findMany({
-    where: { readings: { some: { dismissed: false } } },
+    where: { userId: user.id, readings: { some: { dismissed: false } } },
     orderBy: { updatedAt: "desc" },
     include: { readings: { where: { dismissed: false }, orderBy: { createdAt: "desc" } } },
   });

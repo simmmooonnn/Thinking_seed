@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 import { dailyQuestion } from "@/lib/ai";
 import { gatherQuestionSignals } from "@/lib/signals";
 import RefreshQuestion from "@/app/ui/RefreshQuestion";
@@ -37,25 +38,30 @@ function Role({
 }
 
 export default async function BriefPage() {
+  const user = await getCurrentUser();
   const now = Date.now();
   const WEEK = 7 * 86400000;
 
   const [entries, threads, versions, challenges, activeThreads] = await Promise.all([
-    prisma.entry.findMany({ orderBy: { createdAt: "desc" }, select: { kind: true, createdAt: true, threadId: true } }),
-    prisma.thread.findMany({ include: { _count: { select: { entries: true } } } }),
-    prisma.claimVersion.findMany({ orderBy: { createdAt: "desc" }, take: 4, include: { thread: { select: { id: true, title: true } } } }),
-    prisma.challenge.findMany({ where: { dismissed: false }, orderBy: { createdAt: "desc" }, take: 3, include: { thread: { select: { id: true, title: true } } } }),
-    prisma.thread.findMany({ where: { status: { in: ["seed", "developing"] } }, orderBy: { updatedAt: "desc" }, take: 20, select: { title: true, claim: true } }),
+    prisma.entry.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, select: { kind: true, createdAt: true, threadId: true } }),
+    prisma.thread.findMany({ where: { userId: user.id }, include: { _count: { select: { entries: true } } } }),
+    prisma.claimVersion.findMany({ where: { thread: { userId: user.id } }, orderBy: { createdAt: "desc" }, take: 4, include: { thread: { select: { id: true, title: true } } } }),
+    prisma.challenge.findMany({ where: { dismissed: false, thread: { userId: user.id } }, orderBy: { createdAt: "desc" }, take: 3, include: { thread: { select: { id: true, title: true } } } }),
+    prisma.thread.findMany({ where: { userId: user.id, status: { in: ["seed", "developing"] } }, orderBy: { updatedAt: "desc" }, take: 20, select: { title: true, claim: true } }),
   ]);
 
   // 每日缓存: 今天的头条问题只生成一次
   const date = localDateKey();
-  let brief = await prisma.dailyBrief.findUnique({ where: { date } });
+  let brief = await prisma.dailyBrief.findUnique({ where: { userId_date: { userId: user.id, date } } });
   if (!brief) {
-    const signals = await gatherQuestionSignals();
+    const signals = await gatherQuestionSignals(user.id);
     const q = await dailyQuestion(activeThreads.map((t) => ({ title: t.title, claim: t.claim })), signals);
     // upsert 而非 create: 同一天并发首访不会撞 date 唯一约束报 500
-    brief = await prisma.dailyBrief.upsert({ where: { date }, create: { date, question: q }, update: {} });
+    brief = await prisma.dailyBrief.upsert({
+      where: { userId_date: { userId: user.id, date } },
+      create: { date, question: q, userId: user.id },
+      update: {},
+    });
   }
 
   const recent = entries.filter((e) => now - e.createdAt.getTime() < WEEK);
