@@ -1,0 +1,100 @@
+// Seed — Human-First Reasoning Layer (Slice 1)
+// ローカル単一ユーザー版。将来クラウド多人化するときは datasource を postgresql に差し替える。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 発展中の問い・決定（Reasoning Thread）
+model Thread {
+  id        String   @id @default(cuid())
+  title     String
+  question  String? // 現在の問い
+  claim     String? // 現在の判断
+  status    String   @default("seed") // seed | developing | decided | archived
+  entries    Entry[]
+  versions   ClaimVersion[]
+  challenges Challenge[]
+  readings   Reading[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// v3: 根据某条想法,从网上找到的相关推荐阅读。
+model Reading {
+  id        String   @id @default(cuid())
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  threadId  String
+  title     String
+  url       String?
+  source    String?
+  summary   String? // 一句话:为什么和你的想法相关
+  dismissed Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// v3 Active Seed: AI 联网为某条判断找到的反方/支持证据,或与其它线程的矛盾。
+model Challenge {
+  id          String   @id @default(cuid())
+  thread      Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  threadId    String
+  stance      String // challenge | support | contradiction
+  text        String
+  sourceTitle String?
+  url         String?
+  dismissed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+// 每日简报缓存: 头条问题每天只生成一次(除非手动刷新)。
+model DailyBrief {
+  id        String   @id @default(cuid())
+  date      String   @unique // YYYY-MM-DD(本地)
+  question  String
+  createdAt DateTime @default(now())
+}
+
+// 跨线程主线: AI 发现的"共享同一母题"的线程之间的关系。
+model ThreadLink {
+  id        String   @id @default(cuid())
+  aId       String
+  bId       String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([aId, bId])
+}
+
+// 思想谱系: 当前判断(claim)每次实质变化时存一版,记录"为什么改"。
+model ClaimVersion {
+  id        String   @id @default(cuid())
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  threadId  String
+  claim     String
+  reason    String? // 用户写下的变化理由
+  createdAt DateTime @default(now())
+}
+
+// 一つの推理単位（捕获された観察・判断・証拠・決定…）
+// v2 の captures + thought_units を Slice 1 では 1 テーブルに統合。
+model Entry {
+  id        String   @id @default(cuid())
+  text      String
+  // 来源/種別（Provenance の核）
+  // observation | judgment | question | hypothesis | ai_suggestion | evidence | decision
+  kind      String   @default("observation")
+  aiSuggested Boolean @default(false) // AI が種別を提案し、まだ人が確定していない
+  linkSuggested Boolean @default(false) // AI が「この線程に属する」と提案した関係(人が未確定・撤回可能)
+  audioUrl  String? // 原始音声(語音捕获時)。/audio/<id>.webm
+  imageUrl  String? // 原始画像(截图/图片捕获時)。/uploads/<id>.<ext>
+  source    String   @default("text") // text | voice | image | import
+  thread    Thread?  @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  threadId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

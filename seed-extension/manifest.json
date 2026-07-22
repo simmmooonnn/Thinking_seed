@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Seed 捕获",
+  "version": "0.1.0",
+  "description": "把选中的文字或 AI 对话一键存进 Seed(本地)。",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "存到 Seed"
+  },
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["http://localhost:3000/*", "http://127.0.0.1:3000/*"]
+}

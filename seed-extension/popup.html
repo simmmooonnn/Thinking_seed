@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<style>
+  :root { color-scheme: dark; }
+  body {
+    width: 320px; margin: 0; padding: 14px;
+    background: #0f0f13; color: #ededf2;
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  .brand { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .dot { width:9px; height:9px; border-radius:3px; background:#34d399; box-shadow:0 0 12px #34d399; }
+  .brand b { font-size:13px; letter-spacing:.14em; color:#8b8b96; font-weight:600; }
+  textarea {
+    width:100%; box-sizing:border-box; height:120px; resize:vertical;
+    background:#141418; color:#ededf2; border:1px solid rgba(255,255,255,.14);
+    border-radius:10px; padding:9px; font-size:13px; line-height:1.5; outline:none;
+  }
+  textarea:focus { border-color:#34d399; }
+  .row { display:flex; gap:8px; margin-top:9px; }
+  button {
+    flex:1; border:1px solid rgba(255,255,255,.14); background:transparent; color:#8b8b96;
+    border-radius:9px; padding:8px; font-size:12px; cursor:pointer;
+  }
+  button:hover { color:#ededf2; }
+  button.primary { background:#34d399; border-color:#34d399; color:#04140d; font-weight:600; flex:1.4; }
+  button.primary:hover { filter:brightness(1.08); }
+  .status { margin-top:9px; font-size:11px; color:#5f5f6b; min-height:14px; }
+  .status.ok { color:#34d399; }
+  .status.err { color:#fbbf24; }
+</style>
+</head>
+<body>
+  <div class="brand"><span class="dot"></span><b>SEED · 捕获</b></div>
+  <textarea id="text" placeholder="选中网页/AI 对话里的文字后打开我,会自动带进来。也可直接粘贴。"></textarea>
+  <div class="row">
+    <button id="sel">抓取选中</button>
+    <button id="page">抓取本页 / AI 对话</button>
+  </div>
+  <div class="row">
+    <button id="save" class="primary">存到 Seed ↵</button>
+  </div>
+  <div class="status" id="status">Seed 需在本机运行(localhost:3000)。</div>
+  <script src="popup.js"></script>
+</body>
+</html>

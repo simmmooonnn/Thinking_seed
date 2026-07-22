@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seed — 让答案重新属于你</title>
+<style>
+  :root{
+    --bg:#08080a;--bg-soft:#0f0f13;--panel:#141418;--panel-2:#1a1a20;
+    --line:rgba(255,255,255,.08);--line-2:rgba(255,255,255,.14);
+    --txt:#ededf2;--muted:#8b8b96;--muted-2:#5f5f6b;
+    --grow:#34d399;--grow-soft:rgba(52,211,153,.14);
+    --dead:#6b7280;--dead-soft:rgba(107,114,128,.12);
+    --ai:#c084fc;--ai-soft:rgba(192,132,252,.14);
+    --evi:#60a5fa;--evi-soft:rgba(96,165,250,.14);
+    --amber:#fbbf24;--amber-soft:rgba(251,191,36,.13);
+    --mono:"SF Mono","JetBrains Mono",ui-monospace,"Cascadia Code","Menlo",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5;overflow-x:hidden}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:radial-gradient(1200px 700px at 80% -10%,rgba(52,211,153,.10),transparent 60%),radial-gradient(1000px 800px at -10% 110%,rgba(52,211,153,.05),transparent 55%)}
+
+  main{scroll-snap-type:y proximity;height:100vh;overflow-y:scroll;position:relative;z-index:1}
+  section{min-height:100vh;scroll-snap-align:start;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:6vh 6vw;position:relative}
+  .wrap{width:100%;max-width:1180px;margin:0 auto}
+
+  nav.dots{position:fixed;right:26px;top:50%;transform:translateY(-50%);z-index:20;display:flex;flex-direction:column;gap:14px}
+  nav.dots a{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.18);transition:.3s;display:block}
+  nav.dots a.active{background:var(--grow);box-shadow:0 0 0 4px var(--grow-soft)}
+  .brandmark{position:fixed;left:28px;top:24px;z-index:20;font-family:var(--mono);font-size:14px;letter-spacing:.14em;color:var(--muted);display:flex;align-items:center;gap:9px}
+  .brandmark .dot{width:9px;height:9px;border-radius:2px;background:var(--grow);box-shadow:0 0 14px var(--grow)}
+  .hint{position:fixed;left:28px;bottom:22px;z-index:20;font-family:var(--mono);font-size:12px;color:var(--muted-2);letter-spacing:.05em}
+  .hint b{color:var(--muted)}
+
+  .eyebrow{font-family:var(--mono);font-size:13px;letter-spacing:.22em;text-transform:uppercase;color:var(--grow);margin-bottom:22px}
+  h1{font-size:clamp(38px,6.4vw,86px);line-height:1.02;font-weight:680;letter-spacing:-.03em}
+  h2{font-size:clamp(26px,3.8vw,50px);line-height:1.07;font-weight:660;letter-spacing:-.02em}
+  .grad{background:linear-gradient(180deg,#fff 0%,#b9f5dc 130%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lead{font-size:clamp(16px,1.7vw,21px);color:var(--muted);max-width:60ch;margin-top:24px;line-height:1.55}
+  .kill{color:var(--txt)}.grow-t{color:var(--grow)}
+  .strike{color:var(--muted-2);text-decoration:line-through;text-decoration-color:rgba(255,255,255,.25)}
+
+  .reveal{opacity:0;transform:translateY(22px);transition:opacity .8s cubic-bezier(.22,1,.36,1),transform .8s cubic-bezier(.22,1,.36,1)}
+  .reveal.in{opacity:1;transform:none}
+  .d1{transition-delay:.08s}.d2{transition-delay:.16s}.d3{transition-delay:.24s}.d4{transition-delay:.32s}.d5{transition-delay:.40s}.d6{transition-delay:.48s}.d7{transition-delay:.56s}
+
+  .pill{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border:1px solid var(--line-2);border-radius:100px;font-size:13px;color:var(--muted);font-family:var(--mono);margin-bottom:30px}
+  .pill .pdot{width:6px;height:6px;border-radius:50%;background:var(--grow);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  #hero h1 span.line{display:block}
+
+  /* consumption loop */
+  .loop{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:40px;font-family:var(--mono);font-size:15px}
+  .loop .node{padding:13px 19px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+  .loop .arrow{color:var(--muted-2)}.loop .qn{color:var(--txt)}.loop .an{color:var(--dead)}
+  .loop.spin .node{animation:blink 1.6s infinite}
+  @keyframes blink{0%,100%{border-color:var(--line)}50%{border-color:var(--line-2)}}
+
+  /* tree collapse */
+  .diag-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:52px;align-items:center;margin-top:26px}
+  @media(max-width:900px){.diag-grid{grid-template-columns:1fr;gap:28px}}
+  .svg-card{background:linear-gradient(180deg,var(--panel),#0d0d11);border:1px solid var(--line);border-radius:20px;padding:24px;position:relative;overflow:hidden}
+  .svg-head{display:flex;gap:10px;margin-bottom:8px}
+  .tg{font-family:var(--mono);font-size:12px;letter-spacing:.1em;padding:7px 14px;border-radius:8px;border:1px solid var(--line);color:var(--muted);cursor:pointer;background:transparent;transition:.25s}
+  .tg.on{color:var(--bg);background:var(--grow);border-color:var(--grow);font-weight:600}
+  .tg.on.dead{background:var(--dead);border-color:var(--dead);color:#fff}
+  svg .lbl{font-family:var(--mono);font-size:13px;fill:var(--muted)}
+  svg .nd{transition:opacity .7s ease}.edge{stroke:var(--line-2);stroke-width:1.5;transition:opacity .7s ease}
+
+  /* demo */
+  #demo .wrap{max-width:1240px}
+  .demo-top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-bottom:20px}
+  .askbar{display:flex;gap:10px;flex:1;min-width:280px;max-width:620px}
+  .askbar input{flex:1;background:var(--panel);border:1px solid var(--line-2);border-radius:12px;padding:13px 16px;color:var(--txt);font-size:15px;font-family:var(--sans);outline:none;transition:.2s}
+  .askbar input:focus{border-color:var(--grow);box-shadow:0 0 0 4px var(--grow-soft)}
+  .askbar button{background:var(--grow);color:#04140d;border:none;border-radius:12px;padding:0 22px;font-weight:640;font-size:15px;cursor:pointer;font-family:var(--sans);transition:.2s}
+  .askbar button:hover{filter:brightness(1.08)}
+  .presets{display:flex;gap:8px;flex-wrap:wrap}
+  .preset{font-family:var(--mono);font-size:12.5px;padding:8px 13px;border-radius:100px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;transition:.2s}
+  .preset:hover,.preset.on{border-color:var(--grow);color:var(--grow)}
+  .split{display:grid;grid-template-columns:1fr 1.25fr;gap:22px;align-items:stretch}
+  @media(max-width:900px){.split{grid-template-columns:1fr}}
+  .panel{border:1px solid var(--line);border-radius:18px;background:var(--panel);padding:20px 22px;min-height:340px;display:flex;flex-direction:column}
+  .panel .phead{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:16px;color:var(--muted)}
+  .panel.left .phead .sq{width:9px;height:9px;border-radius:2px;background:var(--dead)}
+  .panel.right{border-color:rgba(52,211,153,.35);background:linear-gradient(180deg,rgba(52,211,153,.05),var(--panel))}
+  .panel.right .phead{color:var(--grow)}
+  .panel.right .phead .sq{width:9px;height:9px;border-radius:2px;background:var(--grow);box-shadow:0 0 12px var(--grow)}
+  .tag-collapse{margin-left:auto;font-size:11px;color:var(--dead);border:1px solid var(--line);border-radius:6px;padding:3px 8px;letter-spacing:.08em}
+  .tag-grow{margin-left:auto;font-size:11px;color:var(--grow);border:1px solid rgba(52,211,153,.4);border-radius:6px;padding:3px 8px;letter-spacing:.08em}
+  .ai-answer{font-size:15.5px;color:#c7c7d0;line-height:1.7;white-space:pre-wrap}
+  .caret{display:inline-block;width:8px;height:18px;background:var(--dead);vertical-align:-3px;margin-left:2px;animation:blink2 1s steps(1) infinite}
+  @keyframes blink2{50%{opacity:0}}
+  .dead-note{margin-top:auto;padding-top:16px;font-family:var(--mono);font-size:12px;color:var(--muted-2);border-top:1px solid var(--line)}
+  .modes{display:flex;gap:6px;margin:-4px 0 14px}
+  .mode{font-family:var(--mono);font-size:12px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;transition:.2s}
+  .mode.on{background:var(--grow-soft);border-color:rgba(52,211,153,.5);color:var(--grow)}
+  .tree{overflow-y:auto;flex:1}
+  .node{margin:6px 0}
+  .node .row{display:flex;gap:10px;align-items:flex-start;cursor:pointer;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--panel-2);transition:.2s;line-height:1.45}
+  .node .row:hover{border-color:rgba(52,211,153,.45);background:rgba(52,211,153,.06)}
+  .node .row .tw{color:var(--grow);font-family:var(--mono);font-size:13px;margin-top:1px;transition:transform .25s;flex-shrink:0}
+  .node.open>.row .tw{transform:rotate(45deg)}
+  .node .row .qt{font-size:14.5px;color:var(--txt)}
+  .node .row.leaf .tw{color:var(--muted-2)}
+  .kids{margin-left:16px;padding-left:16px;border-left:1px solid var(--line-2);overflow:hidden;max-height:0;opacity:0;transition:max-height .5s cubic-bezier(.22,1,.36,1),opacity .4s}
+  .node.open>.kids{max-height:1400px;opacity:1}
+  .root-q{font-size:15px;color:var(--grow);font-family:var(--mono);margin-bottom:12px;padding-bottom:12px;border-bottom:1px dashed var(--line-2)}
+  .persp{display:flex;flex-direction:column;gap:9px;flex:1;overflow-y:auto}
+  .pcard{border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--panel-2);animation:pop .45s cubic-bezier(.22,1,.36,1) both}
+  .pcard .who{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--grow);margin-bottom:5px}
+  .pcard .pq{font-size:14px;color:#d6d6de}
+  @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+  .daily{display:flex;flex-direction:column;gap:11px;flex:1;justify-content:center}
+  .dcard{border:1px solid var(--line);border-left:3px solid var(--grow);border-radius:11px;padding:16px 18px;background:var(--panel-2);animation:pop .5s cubic-bezier(.22,1,.36,1) both}
+  .dcard .dq{font-size:16px;color:var(--txt);line-height:1.5}
+  .dcard .dmeta{font-family:var(--mono);font-size:11.5px;color:var(--muted-2);margin-top:8px}
+
+  /* provenance + pre-commit */
+  .prov-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:26px;align-items:start}
+  @media(max-width:900px){.prov-grid{grid-template-columns:1fr}}
+  .prov-card{border:1px solid var(--line);border-radius:18px;background:var(--panel);padding:22px}
+  .prov-card .ph{display:flex;align-items:center;gap:12px;margin-bottom:6px;font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .prov-sub{font-size:13px;color:var(--muted-2);margin-bottom:16px}
+  .srcToggle{margin-left:auto;font-family:var(--mono);font-size:11.5px;padding:6px 11px;border-radius:8px;border:1px solid var(--line-2);color:var(--muted);background:transparent;cursor:pointer;transition:.2s}
+  .srcToggle.on{color:var(--grow);border-color:rgba(52,211,153,.5);background:var(--grow-soft)}
+  .tline{padding:13px 15px;border:1px solid var(--line);border-left:3px solid var(--line);border-radius:11px;margin:9px 0;background:var(--panel-2);transition:.4s}
+  .tline .tx{font-size:15px;color:#d3d3db;line-height:1.5}
+  .tline .chip{display:none;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;letter-spacing:.05em;padding:3px 9px;border-radius:100px;margin-bottom:8px;width:fit-content}
+  .prov-card.showsrc .chip{display:inline-flex}
+  .chip .cd{width:7px;height:7px;border-radius:50%}
+  .tline[data-s=human]{border-left-color:var(--grow)}
+  .tline[data-s=human] .chip{color:var(--grow);background:var(--grow-soft)}.tline[data-s=human] .cd{background:var(--grow)}
+  .tline[data-s=ai]{border-left-color:var(--ai)}
+  .tline[data-s=ai] .chip{color:var(--ai);background:var(--ai-soft)}.tline[data-s=ai] .cd{background:var(--ai)}
+  .tline[data-s=evi]{border-left-color:var(--evi)}
+  .tline[data-s=evi] .chip{color:var(--evi);background:var(--evi-soft)}.tline[data-s=evi] .cd{background:var(--evi)}
+  .prov-card.showsrc .tline[data-s=human]{background:rgba(52,211,153,.05)}
+  .prov-card.showsrc .tline[data-s=ai]{background:rgba(192,132,252,.05)}
+  .prov-card.showsrc .tline[data-s=evi]{background:rgba(96,165,250,.05)}
+  .adopt{margin-top:10px;font-family:var(--mono);font-size:11.5px;padding:6px 12px;border-radius:8px;border:1px solid rgba(52,211,153,.5);color:var(--grow);background:transparent;cursor:pointer;transition:.2s}
+  .adopt:hover{background:var(--grow-soft)}
+  .adopted-note{display:none;font-family:var(--mono);font-size:11.5px;color:var(--grow);margin-top:8px}
+
+  .precommit{border:1px solid var(--amber);border-radius:18px;background:linear-gradient(180deg,var(--amber-soft),var(--panel));padding:22px}
+  .precommit .ph{color:var(--amber)}
+  .pc-decision{font-size:18px;color:var(--txt);font-weight:600;margin:4px 0 16px;line-height:1.35}
+  .pc-block{margin:12px 0}
+  .pc-lab{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+  .pc-val{font-size:14px;color:#d3d3db;line-height:1.5}
+  .pc-val .g{color:var(--grow)}.pc-val .a{color:var(--ai)}
+  .pc-conflict{border:1px solid rgba(251,191,36,.3);border-radius:10px;padding:11px 13px;background:rgba(251,191,36,.06);font-size:13.5px;color:#e8d9a8}
+  .pc-q{font-size:17px;color:var(--txt);font-weight:600;line-height:1.4;margin:16px 0 14px;padding-left:14px;border-left:3px solid var(--amber)}
+  .pc-actions{display:flex;gap:9px;flex-wrap:wrap}
+  .pc-actions button{font-family:var(--sans);font-size:13.5px;padding:10px 16px;border-radius:10px;cursor:pointer;border:1px solid var(--line-2);background:transparent;color:var(--muted);transition:.2s}
+  .pc-actions .commit{background:var(--grow);border-color:var(--grow);color:#04140d;font-weight:640}
+  .pc-actions button:hover{filter:brightness(1.1);border-color:var(--muted)}
+  .pc-foot{margin-top:16px;font-family:var(--mono);font-size:11.5px;color:var(--muted-2);border-top:1px solid var(--line);padding-top:13px}
+  .pc-done{display:none;margin-top:14px;padding:13px 15px;border:1px solid rgba(52,211,153,.4);border-radius:11px;background:var(--grow-soft);color:var(--grow);font-size:14px}
+
+  /* lineage */
+  .lin{margin-top:30px;max-width:840px}
+  .lin-item{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start}
+  .lin-rail{display:flex;flex-direction:column;align-items:center}
+  .lin-ver{font-family:var(--mono);font-size:13px;font-weight:600;color:#04140d;background:var(--grow);width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .lin-item.dim .lin-ver{background:var(--panel-2);color:var(--muted);border:1px solid var(--line-2)}
+  .lin-line{width:2px;flex:1;background:linear-gradient(var(--grow),var(--line-2));min-height:26px;margin:4px 0}
+  .lin-body{padding-bottom:24px}
+  .lin-claim{font-size:clamp(17px,2vw,23px);color:var(--txt);font-weight:600;line-height:1.35;letter-spacing:-.01em}
+  .lin-item.dim .lin-claim{color:var(--muted)}
+  .lin-reason{font-family:var(--mono);font-size:12.5px;color:var(--grow);margin-top:8px}
+  .lin-item.dim .lin-reason{color:var(--muted-2)}
+  .pitch{font-size:clamp(22px,3vw,40px);line-height:1.3;font-weight:600;letter-spacing:-.01em;max-width:24ch;margin-top:10px}
+  .pitch .grow-t{color:var(--grow)}
+  .sub-pitch{font-family:var(--mono);color:var(--muted);margin-top:20px;font-size:14.5px;line-height:1.7}
+</style>
+</head>
+<body>
+
+<div class="brandmark"><span class="dot"></span>SEED · 思想种子</div>
+<div class="hint">← → 或滚动切换 · <b>右侧可点击 / 可切换来源 / 可 Commit</b></div>
+<nav class="dots" id="dots"></nav>
+
+<main id="deck">
+
+  <!-- S0 HERO -->
+  <section id="hero" data-name="观点">
+    <div class="wrap">
+      <div class="pill reveal"><span class="pdot"></span>Human-First Reasoning · 一个关于"思想从哪里开始"的演讲</div>
+      <h1 class="reveal d1">
+        <span class="line grad">AI 把探索</span>
+        <span class="line">变成了<span class="grow-t">消费。</span></span>
+      </h1>
+      <p class="lead reveal d2">
+        问题从来不是"AI 让人变笨"。<br>
+        真正消失的,是你<span class="kill">观察、怀疑、形成第一判断</span>的那段推理。<br>
+        Seed 想把它<span class="grow-t">保存下来,并让它继续生长</span>。
+      </p>
+      <p class="lead reveal d3" style="font-family:var(--mono);font-size:14px;margin-top:28px;color:var(--muted-2)">
+        Most AI helps you produce an answer. &nbsp;Seed preserves the reasoning that makes it yours.
+      </p>
+    </div>
+  </section>
+
+  <!-- S1 现象 -->
+  <section id="phenomenon" data-name="现象">
+    <div class="wrap">
+      <div class="eyebrow reveal">01 — 现象</div>
+      <h2 class="reveal d1">遇到问题,我们不再探索,<br>只是<span class="grow-t">消费</span>一份整理好的答案。</h2>
+      <div class="loop spin reveal d2">
+        <div class="node qn">问题</div><span class="arrow">→</span>
+        <div class="node an">问 AI</div><span class="arrow">→</span>
+        <div class="node an">接收答案</div><span class="arrow">→</span>
+        <div class="node qn">下一个问题</div><span class="arrow">↻</span>
+      </div>
+      <p class="lead reveal d3">
+        最容易消失的不是"最终判断能力",而是:提问前的<span class="kill">现实观察</span>、看答案前的<span class="kill">第一反应</span>、自己构造解释的尝试、对不确定性的忍耐——以及<span class="strike">思想从哪里来、又如何改变</span>。
+      </p>
+    </div>
+  </section>
+
+  <!-- S2 诊断 -->
+  <section id="diagnosis" data-name="诊断">
+    <div class="wrap">
+      <div class="eyebrow reveal">02 — 真正的诊断</div>
+      <h2 class="reveal d1">不是答案变了。<br>是那棵<span class="grow-t">探索树</span>被坍缩成了一个答案。</h2>
+      <div class="diag-grid">
+        <div class="svg-card reveal d2">
+          <div class="svg-head">
+            <button class="tg on" id="tgPast">以前 · 分叉</button>
+            <button class="tg dead" id="tgNow">今天 · 坍缩</button>
+          </div>
+          <svg viewBox="0 0 600 300" width="100%" height="300">
+            <g id="gPast">
+              <line class="edge" x1="300" y1="52" x2="180" y2="128"/><line class="edge" x1="300" y1="52" x2="300" y2="128"/><line class="edge" x1="300" y1="52" x2="420" y2="128"/>
+              <line class="edge" x1="180" y1="150" x2="120" y2="224"/><line class="edge" x1="180" y1="150" x2="240" y2="224"/><line class="edge" x1="420" y1="150" x2="480" y2="224"/>
+              <g class="nd"><circle cx="300" cy="40" r="15" fill="#34d399"/><text class="lbl" x="300" y="20" text-anchor="middle" fill="#ededf2">问题</text></g>
+              <g class="nd"><circle cx="180" cy="138" r="12" fill="none" stroke="#34d399" stroke-width="2"/></g>
+              <g class="nd"><circle cx="300" cy="138" r="12" fill="none" stroke="#34d399" stroke-width="2"/></g>
+              <g class="nd"><circle cx="420" cy="138" r="12" fill="none" stroke="#34d399" stroke-width="2"/></g>
+              <g class="nd"><circle cx="120" cy="234" r="10" fill="none" stroke="#8b8b96" stroke-width="1.5"/></g>
+              <g class="nd"><circle cx="240" cy="234" r="10" fill="none" stroke="#8b8b96" stroke-width="1.5"/></g>
+              <g class="nd"><circle cx="480" cy="234" r="10" fill="none" stroke="#8b8b96" stroke-width="1.5"/></g>
+              <text class="lbl" x="300" y="285" text-anchor="middle">一个问题 → 许多新问题 → 你自己的想法</text>
+            </g>
+            <g id="gNow" style="opacity:0">
+              <line class="edge" x1="300" y1="52" x2="300" y2="128" style="stroke:#6b7280"/><line class="edge" x1="300" y1="162" x2="300" y2="218" style="stroke:#6b7280"/>
+              <g class="nd"><circle cx="300" cy="40" r="15" fill="#6b7280"/><text class="lbl" x="300" y="20" text-anchor="middle" fill="#ededf2">问题</text></g>
+              <g class="nd"><rect x="270" y="128" width="60" height="34" rx="8" fill="none" stroke="#6b7280" stroke-width="1.5"/><text class="lbl" x="300" y="150" text-anchor="middle" fill="#6b7280">GPT</text></g>
+              <g class="nd"><circle cx="300" cy="234" r="13" fill="rgba(107,114,128,.12)" stroke="#6b7280" stroke-width="1.5"/><text class="lbl" x="300" y="285" text-anchor="middle">一个答案 · 探索树消失</text></g>
+            </g>
+          </svg>
+        </div>
+        <div class="reveal d3">
+          <p class="lead" style="margin-top:0">以前:一个问题岔出 <span class="grow-t">B、C、D</span>,你点开十个网页,<span class="kill">偶然撞见</span>另一样东西,长出新想法。</p>
+          <p class="lead">今天:问题 → GPT → 最终答案。<span class="strike">没被走过的分支,连同它们本可能长成的想法,一起消失了。</span></p>
+          <p class="lead" style="color:var(--grow)">所以产品不该是"更会回答的 ChatGPT"。它要做三件相反的事——<b>把答案重新打开 · 守住是谁在判断 · 记住判断为何改变。</b></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S3 DEMO: 打开分支 -->
+  <section id="demo" data-name="打开分支">
+    <div class="wrap">
+      <div class="demo-top">
+        <div>
+          <div class="eyebrow" style="margin-bottom:12px">03 — 把答案重新打开成问题</div>
+          <div class="presets" id="presets"></div>
+        </div>
+        <div class="askbar">
+          <input id="qInput" placeholder="或者,输入任何一个你真正在想的问题…">
+          <button id="askBtn">生长</button>
+        </div>
+      </div>
+      <div class="split">
+        <div class="panel left">
+          <div class="phead"><span class="sq"></span>今天的 AI<span class="tag-collapse">CONVERGE ↓</span></div>
+          <div class="ai-answer" id="aiAnswer"></div>
+          <div class="dead-note">收敛为一个答案 · 探索到此结束</div>
+        </div>
+        <div class="panel right">
+          <div class="phead"><span class="sq"></span>Seed<span class="tag-grow">DIVERGE ↗</span></div>
+          <div class="modes" id="modes">
+            <button class="mode on" data-m="tree">追问发散</button>
+            <button class="mode" data-m="persp">多视角</button>
+            <button class="mode" data-m="daily">每日母题</button>
+          </div>
+          <div class="root-q" id="rootQ"></div>
+          <div class="tree" id="treeBox"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S4 第一作者: Provenance + Pre-Commit -->
+  <section id="author" data-name="第一作者">
+    <div class="wrap">
+      <div class="eyebrow reveal">04 — 人必须是第一作者</div>
+      <h2 class="reveal d1">AI 可以建议,但<span class="grow-t">你</span>必须是第一作者。<br><span style="font-size:.62em;color:var(--muted);font-weight:400">不是让所有事变慢——只在 5% 真正重要的决定前,守住一件事。</span></h2>
+      <div class="prov-grid">
+        <!-- provenance -->
+        <div class="prov-card reveal d2" id="provCard">
+          <div class="ph"><span>来源 · Provenance</span><button class="srcToggle" id="srcToggle">显示来源</button></div>
+          <div class="prov-sub">同一条笔记里,这四句话看起来一样。但它们来自完全不同的地方。</div>
+          <div class="tline" data-s="human"><span class="chip"><span class="cd"></span>你的观察</span><div class="tx">三位客户,都在"不可逆操作"那一步停下了自动化。</div></div>
+          <div class="tline" data-s="evi"><span class="chip"><span class="cd"></span>外部证据</span><div class="tx">HCI 研究:认知强制机制能降低对 AI 的过度依赖。</div></div>
+          <div class="tline" data-s="ai" id="aiLine"><span class="chip"><span class="cd"></span>AI 建议</span><div class="tx">"可以考虑做一个 Agent 权限管理平台。"</div>
+            <button class="adopt" id="adoptBtn">采纳为我的判断 →</button>
+            <div class="adopted-note" id="adoptNote">✓ 已确认 · 现在这是<b>你的</b>判断,不再是 AI 的</div>
+          </div>
+          <div class="tline" data-s="human"><span class="chip"><span class="cd"></span>你的判断</span><div class="tx">真正的障碍不是模型准确率,而是"不可撤销"。</div></div>
+        </div>
+        <!-- pre-commit -->
+        <div class="precommit reveal d3">
+          <div class="ph">⚡ 提交前检查 · Thinking Pre-Commit</div>
+          <div class="pc-decision">你准备把方向转向 "Agent 权限治理"。</div>
+          <div class="pc-block"><div class="pc-lab">当前依据</div><div class="pc-val"><span class="g">● 2 次客户访谈</span> &nbsp; <span class="g">● 1 次团队讨论</span> &nbsp; <span class="a">● 4 段 AI 市场分析</span></div></div>
+          <div class="pc-block"><div class="pc-lab">尚未验证</div><div class="pc-val">企业是否愿意付费 · 权限是否比部署复杂度更优先</div></div>
+          <div class="pc-block"><div class="pc-conflict">⚠ 与过去冲突:三周前,你认为核心障碍是"模型准确率"。</div></div>
+          <div class="pc-q">什么真实证据,让你改变了判断?</div>
+          <div class="pc-actions">
+            <button>🎤 语音回答</button><button>稍后</button><button class="commit" id="commitBtn">✓ Commit</button>
+          </div>
+          <div class="pc-foot">95% 的时间不打断你 · 只在这 5% 问一个问题</div>
+          <div class="pc-done" id="pcDone">✓ 已记录。你的理由,现在是这个决定的一部分——三个月后你还能说清为什么。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- S5 思想谱系 + pitch -->
+  <section id="lineage" data-name="思想谱系">
+    <div class="wrap">
+      <div class="eyebrow reveal">05 — 思想谱系 · 记住判断为何改变</div>
+      <h2 class="reveal d1">Seed 不只记得你想过什么,<br>还记得你<span class="grow-t">为什么改变。</span></h2>
+      <div class="lin" id="linBox">
+        <div class="lin-item reveal d2">
+          <div class="lin-rail"><div class="lin-ver">v1</div><div class="lin-line"></div></div>
+          <div class="lin-body"><div class="lin-claim">AI 让人越来越少思考。</div><div class="lin-reason">↓ 具体化</div></div>
+        </div>
+        <div class="lin-item reveal d3">
+          <div class="lin-rail"><div class="lin-ver">v2</div><div class="lin-line"></div></div>
+          <div class="lin-body"><div class="lin-claim">AI 减少的,是"形成初始判断"的过程。</div><div class="lin-reason">↓ 发现商业风险</div></div>
+        </div>
+        <div class="lin-item reveal d4">
+          <div class="lin-rail"><div class="lin-ver">v3</div><div class="lin-line"></div></div>
+          <div class="lin-body"><div class="lin-claim">持续制造摩擦,会让产品留存失败。</div><div class="lin-reason">↓ 修正机制</div></div>
+        </div>
+        <div class="lin-item reveal d5">
+          <div class="lin-rail"><div class="lin-ver">v4</div><div class="lin-line"></div></div>
+          <div class="lin-body"><div class="lin-claim">捕获零摩擦,只在高价值节点选择性摩擦。</div><div class="lin-reason">↓ 找到场景</div></div>
+        </div>
+        <div class="lin-item reveal d6">
+          <div class="lin-rail"><div class="lin-ver">v5</div></div>
+          <div class="lin-body"><div class="lin-claim grow-t">Seed:创业者与研究员的 Human-First Reasoning Layer。</div><div class="lin-reason">你刚听的这个想法,自己就演化了 5 版 —— Seed 记录的正是这个过程。</div></div>
+        </div>
+      </div>
+      <div class="pitch reveal d6" style="margin-top:34px">大多数 AI 帮你产出一个答案。<br>Seed 保存<span class="grow-t">让这个答案真正属于你的那段推理。</span></div>
+      <div class="sub-pitch reveal d7">Most AI helps you produce an answer.<br>Seed helps you preserve the human reasoning that makes the answer yours.</div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/* =================== DEMO DATA =================== */
+const TREES={
+  "ai-company":{label:"AI 公司怎么做?",root:"AI 公司怎么做?",
+    answer:"做一家 AI 公司,通常分五步:① 锁定一个垂直场景;② 选择基础模型或微调;③ 构建数据飞轮形成壁垒;④ 采用订阅制或按量计费;⑤ 组建算法 + 产品 + GTM 团队。建议从 niche 切入,快速验证 PMF,再融资扩张。",
+    branches:[
+      {q:"为什么公司一定要存在?",children:[{q:"公司只是为了降低交易成本吗?(科斯, 1937)"},{q:"如果协作成本趋近于 0,还需要公司吗?"},{q:"它是法律拟制,还是自然涌现的结构?"}]},
+      {q:"为什么 Agent 需要公司?",children:[{q:"Agent 之间靠什么协调:市场、层级,还是协议?"},{q:"一个 Agent 能不能同时属于 100 家'公司'?"}]},
+      {q:"有没有'没有公司'的组织?",children:[{q:"开源社区(Linux)靠什么维持?"},{q:"DAO 用代码替代了公司的哪部分职能?"},{q:"市场本身算不算一种无边界的公司?"}]},
+      {q:"生物界有类似结构吗?",children:[{q:"蚁群:没有中心,却有分工"},{q:"黏菌:没有大脑,却能找到最短路径"},{q:"细胞:分化与协作如何自发形成?"}]}],
+    persp:[{who:"VC",q:"市场多大?谁买单?壁垒在哪?18 个月能否证明?"},{who:"科学家",q:"这里哪个假设是可被证伪的?怎么设计实验?"},{who:"人类学家",q:"'公司'是不是某个特定文明才发明的概念?"},{who:"生物学家",q:"组织的本质,是能量与信息的效率问题。"},{who:"游戏设计师",q:"什么样的激励,能让 Agent 自愿协作而不作弊?"}],
+    daily:[{q:"为什么年轻人越来越少用 Google?",m:"母题 · 认知基础设施的转移"},{q:"为什么所有 Agent 越来越像?",m:"母题 · 智能的收敛与同质化"},{q:"为什么每个人得到的信息越来越一致?",m:"母题 · 多样性的消失"}]},
+  "startup":{label:"我该不该现在创业?",root:"我该不该现在创业?",
+    answer:"是否创业可以从几方面评估:① 你是否有明确的问题与解决方案;② 市场规模与时机是否合适;③ 你的资金能支撑多久;④ 团队与技能是否齐备;⑤ 你的风险承受能力。综合来看,若已验证需求且有 12–18 个月储备,可以考虑启动。",
+    branches:[
+      {q:"你是在解决一个问题,还是在逃避一份工作?",children:[{q:"如果现在的工作很理想,你还会想创业吗?"},{q:"'自由'具体指哪一种?你真的更自由了吗?"}]},
+      {q:"'创业'是唯一能实现你目标的路径吗?",children:[{q:"加入一个早期团队算不算?"},{q:"在现有岗位里内部创业呢?"},{q:"先把它做成周末项目会怎样?"}]},
+      {q:"有没有一个你观察了半年、别人还没注意的现象?",children:[{q:"这个现象里,谁已经在偷偷付费?"},{q:"它去年和今年,有什么不同?"}]},
+      {q:"如果失败,你真正失去的是什么?",children:[{q:"是钱、时间,还是身份认同?"},{q:"哪一种损失你其实承受得起?"}]}],
+    persp:[{who:"VC",q:"为什么是现在?不是三年前,也不是三年后?"},{who:"心理学家",q:"你是被'想做成'驱动,还是被'不想输'驱动?"},{who:"历史学家",q:"你崇拜的那些创始人,当年处境和你一样吗?"},{who:"经济学家",q:"你真正的机会成本,到底是多少?"},{who:"80 岁的你",q:"哪个选择,你更不会后悔?"}],
+    daily:[{q:"为什么大多数好点子最后都没被执行?",m:"母题 · 想法与行动之间的鸿沟"},{q:"我最近 30 天,是在提问,还是在消费答案?",m:"母题 · 自己的认知模式"},{q:"我反复回到的那个主题,是不是我的主线?",m:"母题 · 长期问题的识别"}]},
+};
+function genericTree(q){
+  const c=q.trim().replace(/[?？.。]+$/,"");
+  return {root:q,answer:"这是一个很好的问题。综合来看,可以从几个方面考虑……(此处 ChatGPT 会给出一段完整、流畅、结构化的答案,然后——结束。)",
+    branches:[
+      {q:`为什么一定要"${c}"?有没有别的框架?`,children:[{q:"这个问题背后,你真正想解决的是什么?"},{q:"如果它是个假问题呢?真问题会是什么?"}]},
+      {q:"这里哪个假设,如果不成立,答案就完全变了?",children:[{q:"你把哪件事默认成了'理所当然'?"}]},
+      {q:"把它反过来问,会问出什么?",children:[{q:"如果目标相反,你会怎么做?"}]},
+      {q:"这个现象在自然界 / 历史上,对应的是什么?",children:[{q:"谁在别的领域已经遇到过类似结构?"}]},
+      {q:"一年后再看,今天的哪个前提会显得可笑?"}],
+    persp:[{who:"VC",q:"这件事的规模与时机对吗?谁会买单?"},{who:"科学家",q:"这里哪个部分是可以被证伪的?"},{who:"人类学家",q:"这是普世的,还是某个文化特有的?"},{who:"生物学家",q:"从能量与效率看,它意味着什么?"},{who:"未来的你",q:"十年后,你会希望现在怎么选?"}],
+    daily:[{q:`关于"${c}",你真正没想清楚的那一步是什么?`,m:"母题 · 由你的问题生成"},{q:"我最近是在提出新问题,还是在消费旧答案?",m:"母题 · 认知模式"},{q:"哪个问题,值得我花一整周去想?",m:"母题 · 长期主线"}]};
+}
+
+let current=TREES["ai-company"],mode="tree";
+const aiAnswer=document.getElementById("aiAnswer"),treeBox=document.getElementById("treeBox"),rootQ=document.getElementById("rootQ"),presetsEl=document.getElementById("presets");
+Object.keys(TREES).forEach((k,i)=>{const b=document.createElement("button");b.className="preset"+(i===0?" on":"");b.textContent=TREES[k].label;b.onclick=()=>{setActivePreset(b);loadQuestion(TREES[k]);};presetsEl.appendChild(b);});
+function setActivePreset(btn){document.querySelectorAll(".preset").forEach(p=>p.classList.remove("on"));if(btn)btn.classList.add("on");}
+let twTimer=null;
+function typeAnswer(text){clearInterval(twTimer);aiAnswer.innerHTML="";const span=document.createElement("span");aiAnswer.appendChild(span);const caret=document.createElement("span");caret.className="caret";aiAnswer.appendChild(caret);let i=0;twTimer=setInterval(()=>{span.textContent=text.slice(0,i++);if(i>text.length){clearInterval(twTimer);caret.remove();}},14);}
+function makeNode(data,depth){
+  const node=document.createElement("div");node.className="node";
+  const row=document.createElement("div");row.className="row";
+  const tw=document.createElement("span");tw.className="tw";tw.textContent="+";
+  const qt=document.createElement("span");qt.className="qt";qt.textContent=data.q;
+  row.appendChild(tw);row.appendChild(qt);
+  const kids=document.createElement("div");kids.className="kids";
+  node.appendChild(row);node.appendChild(kids);
+  let built=false,isLeaf=!(data.children&&data.children.length);
+  if(isLeaf)row.classList.add("leaf");
+  row.onclick=()=>{if(!built){let ch=data.children;if(!ch||!ch.length){ch=growLeaf(data.q);}ch.forEach(c=>kids.appendChild(makeNode(c,depth+1)));built=true;}node.classList.toggle("open");};
+  return node;
+}
+function growLeaf(q){return [{q:"…那再往下一层:这背后的原因是什么?"},{q:"…有没有一个反例?"}];}
+function renderTree(){treeBox.innerHTML="";rootQ.textContent="↳ "+current.root;current.branches.forEach(b=>treeBox.appendChild(makeNode(b,0)));}
+function renderPersp(){treeBox.innerHTML="";rootQ.textContent="↳ 同一个问题,五个世界:";const box=document.createElement("div");box.className="persp";current.persp.forEach((p,i)=>{const c=document.createElement("div");c.className="pcard";c.style.animationDelay=(i*.09)+"s";c.innerHTML=`<div class="who">${p.who} 视角</div><div class="pq">${p.q}</div>`;box.appendChild(c);});treeBox.appendChild(box);}
+function renderDaily(){treeBox.innerHTML="";rootQ.textContent="↳ 今天,三个值得你花一小时的母题:";const box=document.createElement("div");box.className="daily";current.daily.forEach((d,i)=>{const c=document.createElement("div");c.className="dcard";c.style.animationDelay=(i*.12)+"s";c.innerHTML=`<div class="dq">${d.q}</div><div class="dmeta">${d.m}</div>`;box.appendChild(c);});treeBox.appendChild(box);}
+function renderRight(){if(mode==="tree")renderTree();else if(mode==="persp")renderPersp();else renderDaily();}
+function loadQuestion(obj){current=obj;typeAnswer(current.answer);renderRight();}
+document.querySelectorAll(".mode").forEach(m=>{m.onclick=()=>{document.querySelectorAll(".mode").forEach(x=>x.classList.remove("on"));m.classList.add("on");mode=m.dataset.m;renderRight();};});
+function submitQ(){const v=document.getElementById("qInput").value.trim();if(!v)return;setActivePreset(null);loadQuestion(genericTree(v));}
+document.getElementById("askBtn").onclick=submitQ;
+document.getElementById("qInput").addEventListener("keydown",e=>{if(e.key==="Enter")submitQ();});
+loadQuestion(current);
+
+/* =================== TREE COLLAPSE (S2) =================== */
+const gPast=document.getElementById("gPast"),gNow=document.getElementById("gNow"),tgPast=document.getElementById("tgPast"),tgNow=document.getElementById("tgNow");
+function showPast(){gPast.style.opacity=1;gNow.style.opacity=0;tgPast.classList.add("on");tgNow.classList.remove("on");}
+function showNow(){gPast.style.opacity=0;gNow.style.opacity=1;tgNow.classList.add("on");tgPast.classList.remove("on");}
+tgPast.onclick=showPast;tgNow.onclick=showNow;
+
+/* =================== PROVENANCE + PRE-COMMIT (S4) =================== */
+const provCard=document.getElementById("provCard"),srcToggle=document.getElementById("srcToggle");
+srcToggle.onclick=()=>{const on=provCard.classList.toggle("showsrc");srcToggle.classList.toggle("on",on);srcToggle.textContent=on?"隐藏来源":"显示来源";};
+const adoptBtn=document.getElementById("adoptBtn"),aiLine=document.getElementById("aiLine"),adoptNote=document.getElementById("adoptNote");
+adoptBtn.onclick=()=>{aiLine.setAttribute("data-s","human");aiLine.querySelector(".chip").innerHTML='<span class="cd"></span>你的判断';adoptBtn.style.display="none";adoptNote.style.display="block";if(!provCard.classList.contains("showsrc"))srcToggle.click();};
+document.getElementById("commitBtn").onclick=()=>{document.getElementById("pcDone").style.display="block";};
+
+/* =================== NAV + REVEAL + KEYBOARD =================== */
+const deck=document.getElementById("deck"),sections=[...document.querySelectorAll("section")],dotsEl=document.getElementById("dots");
+sections.forEach((s)=>{const a=document.createElement("a");a.href="#"+s.id;a.title=s.dataset.name;a.onclick=e=>{e.preventDefault();s.scrollIntoView({behavior:"smooth"});};dotsEl.appendChild(a);});
+const dotEls=[...dotsEl.children];
+const io=new IntersectionObserver((ents)=>{ents.forEach(en=>{if(en.isIntersecting){const idx=sections.indexOf(en.target);dotEls.forEach((d,i)=>d.classList.toggle("active",i===idx));en.target.querySelectorAll(".reveal").forEach(r=>r.classList.add("in"));if(en.target.id==="diagnosis"){showPast();setTimeout(showNow,1400);}}});},{threshold:.5});
+sections.forEach(s=>io.observe(s));
+function currentIndex(){return Math.round(deck.scrollTop/window.innerHeight);}
+document.addEventListener("keydown",e=>{
+  if(document.activeElement&&document.activeElement.tagName==="INPUT")return;
+  if(["ArrowDown","ArrowRight","PageDown"," "].includes(e.key)){e.preventDefault();sections[Math.min(currentIndex()+1,sections.length-1)].scrollIntoView({behavior:"smooth"});}
+  if(["ArrowUp","ArrowLeft","PageUp"].includes(e.key)){e.preventDefault();sections[Math.max(currentIndex()-1,0)].scrollIntoView({behavior:"smooth"});}
+});
+</script>
+</body>
+</html>

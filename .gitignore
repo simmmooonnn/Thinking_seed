@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# Build outputs
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# Env / secrets — never upload
+.env
+.env.*
+!.env.example
+
+# Local database (data stays local; schema is tracked via prisma/schema.prisma)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# AI tooling files (kept locally, not published)
+CLAUDE.md
+AGENTS.md
+.claude/
+
+# Logs / temp
+*.log
+dev.log
+.turbo/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
