@@ -565,9 +565,11 @@ export async function computeEvolution() {
   const span = `约 ${weeks} 周,${threads.length} 条思想线`;
 
   const story = await evolutionStory({ turns, steadfast, emerging, dormant, span });
-  // 证据链: 章节里提到的思想线名 → 线程 id,前端渲染成可跳转的 chip
+  // 证据链: 章节里提到的思想线名 → 线程 id,前端渲染成可跳转的 chip。
+  // 只保留能对上真实线名的(模型偶尔会返回分类词之类的非线名,直接丢弃)。
   const titleToId: Record<string, string> = {};
   for (const t of threads) titleToId[t.title] = t.id;
+  story.chapters = story.chapters.map((c) => ({ ...c, threads: c.threads.filter((n) => titleToId[n]) }));
   return { story, titleToId };
 }
 
