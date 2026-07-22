@@ -18,5 +18,6 @@ const ok = aSees.length === 1 && aSees[0].title === "A的线" && bSees.length ==
 console.log(ok ? "PASS 隔离生效" : "FAIL 串了", { a: aSees.map(t=>t.title), b: bSees.map(t=>t.title) });
 
 await p.$disconnect();
-rmSync("./verify-tmp.db", { force: true });
+// Prisma 把 file:./verify-tmp.db 解析到 schema 所在目录(prisma/),而非 cwd,真实文件在 prisma/verify-tmp.db
+rmSync("./prisma/verify-tmp.db", { force: true });
 process.exit(ok ? 0 : 1);

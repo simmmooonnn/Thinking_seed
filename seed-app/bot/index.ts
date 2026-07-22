@@ -24,8 +24,9 @@ const deps: HandlerDeps = {
     (await prisma.user.findUnique({ where: { telegramUserId: String(tgId) } }))?.id ?? null,
   ingestText: async (userId, text) => {
     const res = await ingestCore(userId, text, { source: "telegram" });
-    const kind = res?.entry.kind ?? "observation";
-    const title = res?.suggested
+    if (!res) return null;
+    const kind = res.entry.kind;
+    const title = res.suggested
       ? (await prisma.thread.findUnique({ where: { id: res.suggested }, select: { title: true } }))?.title ?? null
       : null;
     return { kind: kindMeta(kind).label, threadTitle: title };
@@ -58,8 +59,17 @@ for (;;) {
   try {
     const updates = await getUpdates(token, offset);
     for (const u of updates) {
-      offset = u.update_id + 1;
-      await handleUpdate(u, deps);
+      const next = u.update_id + 1;
+      try {
+        await handleUpdate(u, deps);
+      } catch (e) {
+        console.error(`处理消息 ${u.update_id} 出错:`, (e as Error).message);
+        const chatId = u.message?.chat.id;
+        if (chatId != null) {
+          try { await sendMessage(token, chatId, "⚠️ 这条没记下(网络或服务波动),请重发一次。"); } catch {}
+        }
+      }
+      offset = next;
     }
     const now = new Date();
     const owner = await prisma.user.findFirst({ where: { isOwner: true } });

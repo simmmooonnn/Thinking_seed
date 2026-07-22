@@ -2,7 +2,7 @@ import type { Update } from "./telegram";
 
 export interface HandlerDeps {
   resolveUserId(tgId: number): Promise<string | null>;
-  ingestText(userId: string, text: string): Promise<{ kind: string; threadTitle: string | null }>;
+  ingestText(userId: string, text: string): Promise<{ kind: string; threadTitle: string | null } | null>;
   transcribe(fileId: string): Promise<string>;
   dailyQuestion(userId: string): Promise<string>;
   reply(chatId: number, text: string): Promise<void>;
@@ -27,10 +27,15 @@ export async function handleUpdate(update: Update, deps: HandlerDeps): Promise<v
   }
 
   let text = msg.text ?? null;
-  if (!text && msg.voice) text = await deps.transcribe(msg.voice.file_id);
+  if (!text && msg.voice) {
+    text = await deps.transcribe(msg.voice.file_id);
+    if (!text) { await deps.reply(chatId, "🎤 没能把这条语音转成文字,再说一遍或改用文字?"); return; }
+  }
   if (!text) return;
 
-  const { kind, threadTitle } = await deps.ingestText(userId, text);
+  const result = await deps.ingestText(userId, text);
+  if (!result) { await deps.reply(chatId, "没识别到内容,换句话再说说?"); return; }
+  const { kind, threadTitle } = result;
   const where = threadTitle ? `归入「${threadTitle}」` : "暂放收件箱";
   const head = msg.voice ? `🎤 "${text}"\n` : "";
   await deps.reply(chatId, `${head}🌱 已记下 · ${kind} · ${where}`);
