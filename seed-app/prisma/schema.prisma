@@ -10,6 +10,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ユーザー（多人化の地基。当面は nullable な userId で既存データを壊さない）
+model User {
+  id             String   @id @default(cuid())
+  name           String?
+  telegramUserId String?  @unique
+  isOwner        Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  threads Thread[]
+  entries Entry[]
+  briefs  DailyBrief[]
+  links   ThreadLink[]
+}
+
 // 発展中の問い・決定（Reasoning Thread）
 model Thread {
   id        String   @id @default(cuid())
@@ -21,6 +35,8 @@ model Thread {
   versions   ClaimVersion[]
   challenges Challenge[]
   readings   Reading[]
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -54,9 +70,13 @@ model Challenge {
 // 每日简报缓存: 头条问题每天只生成一次(除非手动刷新)。
 model DailyBrief {
   id        String   @id @default(cuid())
-  date      String   @unique // YYYY-MM-DD(本地)
+  date      String // YYYY-MM-DD(本地)
   question  String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  @@unique([userId, date])
 }
 
 // 跨线程主线: AI 发现的"共享同一母题"的线程之间的关系。
@@ -65,6 +85,8 @@ model ThreadLink {
   aId       String
   bId       String
   reason    String?
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@unique([aId, bId])
@@ -95,6 +117,8 @@ model Entry {
   source    String   @default("text") // text | voice | image | import
   thread    Thread?  @relation(fields: [threadId], references: [id], onDelete: SetNull)
   threadId  String?
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
