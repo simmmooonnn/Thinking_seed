@@ -241,6 +241,9 @@ export default function Graph({
     dataRef.current = data;
     stickyRef.current = null;
     rebuild();
+    // データ差し替え時は染色を初期状態に戻す(残留フェードを防ぐ)
+    highlight(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, rebuild]);
 
   // 検索 / 色フィルタ変更時に再ペイント(ホバー中はその近傍ハイライトを維持)
