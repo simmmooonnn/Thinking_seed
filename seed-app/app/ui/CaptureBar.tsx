@@ -2,12 +2,18 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createEntry } from "@/app/actions";
+import { createEntry, setKind, moveEntryToThread, type CaptureReceipt } from "@/app/actions";
+import { kindMeta, type Kind } from "@/lib/types";
+
+// 回执可纠正的类别(用户自己的五类)
+const FIX_KINDS: Kind[] = ["observation", "judgment", "question", "hypothesis", "decision"];
 
 export default function CaptureBar() {
   const router = useRouter();
   const [val, setVal] = useState("");
   const [pending, start] = useTransition();
+  const [receipt, setReceipt] = useState<CaptureReceipt | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // 録音
   const [recording, setRecording] = useState(false);
@@ -64,9 +70,65 @@ export default function CaptureBar() {
     const fd = new FormData();
     fd.set("text", text);
     start(async () => {
-      await createEntry(fd);
-      setVal("");
-      router.refresh();
+      try {
+        const r = await createEntry(fd);
+        setVal("");
+        setReceipt(r);
+        router.refresh();
+      } catch {
+        notify("没记下(网络波动),请重试。");
+      }
+    });
+  }
+
+  // 回执 8 秒后自动消失(纠正会刷新计时);不强制任何确认
+  useEffect(() => {
+    if (!receipt) return;
+    const t = setTimeout(() => setReceipt(null), 8000);
+    return () => clearTimeout(t);
+  }, [receipt]);
+
+  // 桌面零摩擦: 任意处按 / 直接聚焦输入条;Esc 失焦
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      const typing = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        inputRef.current?.focus();
+      } else if (e.key === "Escape" && el === inputRef.current) {
+        inputRef.current?.blur();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // 一步纠正: 改类别 / 移出线程(不打断,不强制)
+  function fixKind(k: Kind) {
+    const r = receipt;
+    if (!r || pending) return;
+    start(async () => {
+      try {
+        await setKind(r.id, k);
+        setReceipt({ ...r, kind: k });
+        router.refresh();
+      } catch {
+        notify("没改成,请重试。");
+      }
+    });
+  }
+  function unlink() {
+    const r = receipt;
+    if (!r || pending) return;
+    start(async () => {
+      try {
+        await moveEntryToThread(r.id, null);
+        setReceipt({ ...r, threadId: null, threadTitle: null, question: null });
+        router.refresh();
+      } catch {
+        notify("没改成,请重试。");
+      }
     });
   }
 
@@ -87,7 +149,18 @@ export default function CaptureBar() {
           const res = await fetch("/api/voice", { method: "POST", body: fd });
           const j = await res.json();
           if (j.error) notify(j.error);
-          else router.refresh();
+          else {
+            if (j.entryId) {
+              setReceipt({
+                id: j.entryId,
+                kind: j.kind ?? "observation",
+                threadId: j.threadId ?? null,
+                threadTitle: j.threadTitle ?? null,
+                question: j.question ?? null,
+              });
+            }
+            router.refresh();
+          }
         } catch {
           notify("上传失败,检查网络。");
         } finally {
@@ -117,6 +190,59 @@ export default function CaptureBar() {
       {toast && (
         <div className="toast pointer-events-auto rounded-full border border-amber/40 bg-panel/95 px-4 py-2 text-[13px] text-amber shadow-xl backdrop-blur">
           {toast}
+        </div>
+      )}
+
+      {/* 捕获回执: AI 的归类是"可见、可查、可撤销"的 —— 一步纠正,不点 8 秒后自动消失 */}
+      {receipt && (
+        <div className="toast pointer-events-auto w-full max-w-xl rounded-2xl border border-line2 bg-panel/95 px-4 py-2.5 shadow-xl backdrop-blur">
+          <div className="flex items-center gap-2 text-[13px]">
+            <span className="select-none">🌱</span>
+            <span className="text-muted">已记下</span>
+            <span className="mono text-[12px]" style={{ color: kindMeta(receipt.kind).dot }}>
+              {kindMeta(receipt.kind).label}
+            </span>
+            <span className="min-w-0 truncate text-txt">
+              {receipt.threadTitle ? `→「${receipt.threadTitle}」` : "→ 收件箱"}
+            </span>
+            <button
+              onClick={() => setReceipt(null)}
+              aria-label="知道了"
+              className="mono ml-auto shrink-0 rounded px-1 text-muted2 hover:text-txt"
+            >
+              ✕
+            </button>
+          </div>
+          {receipt.question && (
+            <p className="mt-1 truncate text-[12px] text-muted2">这条线在问:{receipt.question}</p>
+          )}
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            <span className="mono text-[10px] text-muted2">不对?</span>
+            {FIX_KINDS.map((k) => (
+              <button
+                key={k}
+                onClick={() => fixKind(k)}
+                disabled={pending || receipt.kind === k}
+                className="mono rounded-md border px-1.5 py-0.5 text-[10px] transition disabled:opacity-90"
+                style={{
+                  color: receipt.kind === k ? kindMeta(k).dot : "var(--muted)",
+                  borderColor: receipt.kind === k ? `${kindMeta(k).dot}66` : "var(--line)",
+                  background: receipt.kind === k ? "rgba(255,255,255,.05)" : "transparent",
+                }}
+              >
+                {kindMeta(k).label}
+              </button>
+            ))}
+            {receipt.threadId && (
+              <button
+                onClick={unlink}
+                disabled={pending}
+                className="mono rounded-md border border-line px-1.5 py-0.5 text-[10px] text-muted transition hover:text-txt disabled:opacity-40"
+              >
+                移出线程
+              </button>
+            )}
+          </div>
         </div>
       )}
       <div className="pointer-events-auto flex w-full max-w-xl items-center gap-2 rounded-full border border-line2 bg-panel/90 px-2 py-2 shadow-2xl backdrop-blur">
@@ -157,6 +283,7 @@ export default function CaptureBar() {
         </button>
 
         <input
+          ref={inputRef}
           value={val}
           onChange={(e) => setVal(e.target.value)}
           onPaste={(e) => {
@@ -177,7 +304,7 @@ export default function CaptureBar() {
                 ? "转写中…"
                 : pending
                   ? "AI 识别来源…"
-                  : "刚刚想到了什么?  ↵ 记下 · 🎤 说"
+                  : "刚刚想到了什么?  ↵ 记下 · 🎤 说 · 任意处按 /"
           }
           disabled={recording || uploading}
           className="flex-1 bg-transparent px-2 text-[15px] outline-none placeholder:text-muted2 disabled:opacity-60"

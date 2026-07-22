@@ -3,6 +3,7 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { transcribe } from "@/lib/transcribe";
 import { ingest } from "@/lib/ingest";
+import { prisma } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -27,5 +28,24 @@ export async function POST(req: NextRequest) {
   await writeFile(path.join(dir, fname), buf);
 
   const r = await ingest(text, { audioUrl: `/audio/${fname}`, source: "voice" });
-  return Response.json({ ok: true, text, entryId: r?.entry.id });
+  // 回执: 类别 + 归入哪条线(供前端展示与一步纠正)
+  let threadTitle: string | null = null;
+  let question: string | null = null;
+  if (r?.suggested) {
+    const t = await prisma.thread.findUnique({
+      where: { id: r.suggested },
+      select: { title: true, question: true },
+    });
+    threadTitle = t?.title ?? null;
+    question = t?.question ?? null;
+  }
+  return Response.json({
+    ok: true,
+    text,
+    entryId: r?.entry.id,
+    kind: r?.entry.kind ?? null,
+    threadId: r?.suggested ?? null,
+    threadTitle,
+    question,
+  });
 }

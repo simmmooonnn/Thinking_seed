@@ -28,10 +28,31 @@ import { ingest } from "@/lib/ingest";
 import type { Kind } from "@/lib/types";
 
 // 捕获: テキスト。来源分类 + 候選線程の自動判定は ingest() が担う（内部で user を取り userId を付与）。
-export async function createEntry(formData: FormData) {
+// 返回"回执":类别 + 归入哪条线(含该线的问题,帮助重建语境),供前端一步纠正。
+export interface CaptureReceipt {
+  id: string;
+  kind: string;
+  threadId: string | null;
+  threadTitle: string | null;
+  question: string | null;
+}
+
+export async function createEntry(formData: FormData): Promise<CaptureReceipt | null> {
   const text = String(formData.get("text") ?? "").trim();
-  if (!text) return;
-  await ingest(text, { source: "text" });
+  if (!text) return null;
+  const res = await ingest(text, { source: "text" });
+  if (!res) return null;
+  let threadTitle: string | null = null;
+  let question: string | null = null;
+  if (res.suggested) {
+    const t = await prisma.thread.findUnique({
+      where: { id: res.suggested },
+      select: { title: true, question: true },
+    });
+    threadTitle = t?.title ?? null;
+    question = t?.question ?? null;
+  }
+  return { id: res.entry.id, kind: res.entry.kind, threadId: res.suggested, threadTitle, question };
 }
 
 // AI が張った仮リンクを人が確定する。
