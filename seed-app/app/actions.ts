@@ -451,6 +451,46 @@ export async function computeProfile() {
   };
 }
 
+// 认知画像的每日缓存: 进认知页零点击即见(与每日简报同模式)。
+// AI 失败/记录太少时返回的空画像不缓存,避免把一次失败缓存一整天。
+type ProfileResult = Awaited<ReturnType<typeof computeProfile>>;
+
+function profileLooksEmpty(r: ProfileResult): boolean {
+  return r.profile.strengths.length === 0 && r.profile.blindspots.length === 0;
+}
+
+export async function getTodayProfile(): Promise<ProfileResult> {
+  const user = await getCurrentUser();
+  const date = localDateKey();
+  const hit = await prisma.dailyProfile.findUnique({
+    where: { userId_date: { userId: user.id, date } },
+  });
+  if (hit) return JSON.parse(hit.json) as ProfileResult;
+  const r = await computeProfile();
+  if (!profileLooksEmpty(r)) {
+    await prisma.dailyProfile.upsert({
+      where: { userId_date: { userId: user.id, date } },
+      create: { userId: user.id, date, json: JSON.stringify(r) },
+      update: { json: JSON.stringify(r) },
+    });
+  }
+  return r;
+}
+
+export async function refreshTodayProfile(): Promise<void> {
+  const user = await getCurrentUser();
+  const date = localDateKey();
+  const r = await computeProfile();
+  if (!profileLooksEmpty(r)) {
+    await prisma.dailyProfile.upsert({
+      where: { userId_date: { userId: user.id, date } },
+      create: { userId: user.id, date, json: JSON.stringify(r) },
+      update: { json: JSON.stringify(r) },
+    });
+  }
+  revalidatePath("/mind");
+}
+
 // v4 主动越界提醒: 检测一个此刻最值得提的模式,写成一句轻声提醒。
 // 纯规则挑候选(便宜),只对选中的一条调一次 AI 润色。返回 null 表示没啥好说的。
 export async function getNudge(): Promise<{ id: string; text: string; threadId?: string } | null> {

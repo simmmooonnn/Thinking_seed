@@ -18,10 +18,23 @@ model User {
   isOwner        Boolean  @default(false)
   createdAt      DateTime @default(now())
 
-  threads Thread[]
-  entries Entry[]
-  briefs  DailyBrief[]
-  links   ThreadLink[]
+  threads  Thread[]
+  entries  Entry[]
+  briefs   DailyBrief[]
+  links    ThreadLink[]
+  profiles DailyProfile[]
+}
+
+// 认知画像的每日缓存: 进认知页零点击即见,当天只生成一次(除非手动刷新)。
+model DailyProfile {
+  id        String   @id @default(cuid())
+  date      String // YYYY-MM-DD(本地)
+  json      String // { profile, basis } 序列化
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
 }
 
 // 発展中の問い・決定（Reasoning Thread）
