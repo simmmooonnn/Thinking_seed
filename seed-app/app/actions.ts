@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 import {
   classifyKind,
   generateMemo,
@@ -26,7 +27,7 @@ import { gatherQuestionSignals } from "@/lib/signals";
 import { ingest } from "@/lib/ingest";
 import type { Kind } from "@/lib/types";
 
-// 捕获: テキスト。来源分类 + 候選線程の自動判定は ingest() が担う。
+// 捕获: テキスト。来源分类 + 候選線程の自動判定は ingest() が担う（内部で user を取り userId を付与）。
 export async function createEntry(formData: FormData) {
   const text = String(formData.get("text") ?? "").trim();
   if (!text) return;
@@ -35,14 +36,19 @@ export async function createEntry(formData: FormData) {
 
 // AI が張った仮リンクを人が確定する。
 export async function confirmLink(entryId: string) {
-  await prisma.entry.update({ where: { id: entryId }, data: { linkSuggested: false } });
+  const user = await getCurrentUser();
+  await prisma.entry.updateMany({
+    where: { id: entryId, userId: user.id },
+    data: { linkSuggested: false },
+  });
   revalidatePath("/");
 }
 
 // Thinking Pre-Commit / 先追问: 当前判断に対して一つだけ質問を返す。
 export async function askQuestion(threadId: string): Promise<string> {
-  const t = await prisma.thread.findUnique({
-    where: { id: threadId },
+  const user = await getCurrentUser();
+  const t = await prisma.thread.findFirst({
+    where: { id: threadId, userId: user.id },
     include: { entries: { orderBy: { createdAt: "asc" } } },
   });
   if (!t) return "";
@@ -55,35 +61,41 @@ export async function askQuestion(threadId: string): Promise<string> {
 
 // 来源を確定 / 変更する（人が第一作者: AI の提案を人が承認して初めて確定）。
 export async function setKind(entryId: string, kind: Kind) {
+  const user = await getCurrentUser();
+  const e = await prisma.entry.findFirst({ where: { id: entryId, userId: user.id } });
+  if (!e) return;
   await prisma.entry.update({
     where: { id: entryId },
     data: { kind, aiSuggested: false },
   });
   revalidatePath("/");
-  const e = await prisma.entry.findUnique({ where: { id: entryId } });
-  if (e?.threadId) revalidatePath(`/thread/${e.threadId}`);
+  if (e.threadId) revalidatePath(`/thread/${e.threadId}`);
 }
 
 export async function deleteEntry(entryId: string) {
-  const e = await prisma.entry.findUnique({ where: { id: entryId } });
+  const user = await getCurrentUser();
+  const e = await prisma.entry.findFirst({ where: { id: entryId, userId: user.id } });
+  if (!e) return;
   await prisma.entry.delete({ where: { id: entryId } });
   revalidatePath("/");
-  if (e?.threadId) revalidatePath(`/thread/${e.threadId}`);
+  if (e.threadId) revalidatePath(`/thread/${e.threadId}`);
 }
 
 // 新しい Thread を作って空で開く。
 export async function createThread(formData: FormData) {
+  const user = await getCurrentUser();
   const title = String(formData.get("title") ?? "").trim() || "未命名的问题";
-  const t = await prisma.thread.create({ data: { title } });
+  const t = await prisma.thread.create({ data: { title, userId: user.id } });
   redirect(`/thread/${t.id}`);
 }
 
 // Inbox のエントリから Thread を起こし、そのエントリを移す。
 export async function newThreadFromEntry(entryId: string) {
-  const e = await prisma.entry.findUnique({ where: { id: entryId } });
+  const user = await getCurrentUser();
+  const e = await prisma.entry.findFirst({ where: { id: entryId, userId: user.id } });
   if (!e) return;
   const title = e.text.length > 40 ? e.text.slice(0, 40) + "…" : e.text;
-  const t = await prisma.thread.create({ data: { title } });
+  const t = await prisma.thread.create({ data: { title, userId: user.id } });
   await prisma.entry.update({
     where: { id: entryId },
     data: { threadId: t.id, linkSuggested: false },
@@ -92,6 +104,13 @@ export async function newThreadFromEntry(entryId: string) {
 }
 
 export async function moveEntryToThread(entryId: string, threadId: string | null) {
+  const user = await getCurrentUser();
+  const e = await prisma.entry.findFirst({ where: { id: entryId, userId: user.id } });
+  if (!e) return;
+  if (threadId) {
+    const t = await prisma.thread.findFirst({ where: { id: threadId, userId: user.id } });
+    if (!t) return;
+  }
   await prisma.entry.update({
     where: { id: entryId },
     data: { threadId, linkSuggested: false },
@@ -102,10 +121,13 @@ export async function moveEntryToThread(entryId: string, threadId: string | null
 
 // Thread に直接エントリを追加（AI が種別を提案）。
 export async function addEntryToThread(threadId: string, formData: FormData) {
+  const user = await getCurrentUser();
   const text = String(formData.get("text") ?? "").trim();
   if (!text) return;
+  const t = await prisma.thread.findFirst({ where: { id: threadId, userId: user.id } });
+  if (!t) return;
   const kind = await classifyKind(text);
-  await prisma.entry.create({ data: { text, kind, aiSuggested: true, threadId } });
+  await prisma.entry.create({ data: { text, kind, aiSuggested: true, threadId, userId: user.id } });
   await prisma.thread.update({ where: { id: threadId }, data: { updatedAt: new Date() } });
   revalidatePath(`/thread/${threadId}`);
 }
@@ -114,13 +136,15 @@ export async function updateThread(
   threadId: string,
   data: { title?: string; question?: string; claim?: string; status?: string },
 ) {
+  const user = await getCurrentUser();
   // 判断が実質変化したら谱系にスナップショット
+  const cur = await prisma.thread.findFirst({
+    where: { id: threadId, userId: user.id },
+    select: { claim: true },
+  });
+  if (!cur) return;
   if (data.claim !== undefined && data.claim.trim()) {
-    const cur = await prisma.thread.findUnique({
-      where: { id: threadId },
-      select: { claim: true },
-    });
-    if (cur && data.claim.trim() !== (cur.claim ?? "")) {
+    if (data.claim.trim() !== (cur.claim ?? "")) {
       await prisma.claimVersion.create({ data: { threadId, claim: data.claim.trim() } });
     }
   }
@@ -131,7 +155,12 @@ export async function updateThread(
 
 // 谱系: 某个版本の"为什么改"を書く。
 export async function setVersionReason(versionId: string, reason: string) {
-  const v = await prisma.claimVersion.update({
+  const user = await getCurrentUser();
+  const v = await prisma.claimVersion.findFirst({
+    where: { id: versionId, thread: { userId: user.id } },
+  });
+  if (!v) return;
+  await prisma.claimVersion.update({
     where: { id: versionId },
     data: { reason },
   });
@@ -140,7 +169,11 @@ export async function setVersionReason(versionId: string, reason: string) {
 
 // v3 Active Seed: 联网为该线程的判断找反方/支持证据,存成挑战卡。
 export async function runChallenge(threadId: string): Promise<{ count: number }> {
-  const t = await prisma.thread.findUnique({ where: { id: threadId }, select: { title: true, claim: true } });
+  const user = await getCurrentUser();
+  const t = await prisma.thread.findFirst({
+    where: { id: threadId, userId: user.id },
+    select: { title: true, claim: true },
+  });
   if (!t) return { count: 0 };
   const cards = await challengeClaim(t.title, t.claim ?? "");
   for (const k of cards) {
@@ -155,8 +188,9 @@ export async function runChallenge(threadId: string): Promise<{ count: number }>
 
 // v3: 自分の線程間の矛盾を検出 → 挑战カード(contradiction)に。
 export async function scanContradictions(): Promise<{ count: number }> {
+  const user = await getCurrentUser();
   const threads = await prisma.thread.findMany({
-    where: { status: { not: "archived" }, claim: { not: null } },
+    where: { userId: user.id, status: { not: "archived" }, claim: { not: null } },
     orderBy: { createdAt: "asc" },
     select: { id: true, title: true, claim: true },
   });
@@ -168,7 +202,12 @@ export async function scanContradictions(): Promise<{ count: number }> {
     const text = `与「${B.title}」冲突:${p.reason}`;
     // 按线程对去重(同一对矛盾只留一张,不随 reason 措辞变化重复生成)
     const dup = await prisma.challenge.findFirst({
-      where: { threadId: A.id, stance: "contradiction", text: { contains: `与「${B.title}」冲突` } },
+      where: {
+        threadId: A.id,
+        stance: "contradiction",
+        text: { contains: `与「${B.title}」冲突` },
+        thread: { userId: user.id },
+      },
     });
     if (dup) continue;
     await prisma.challenge.create({ data: { threadId: A.id, stance: "contradiction", text } });
@@ -180,8 +219,9 @@ export async function scanContradictions(): Promise<{ count: number }> {
 
 // Create: 把一条线程写成 文章/演讲提纲/研究proposal/推文串。
 export async function makeArticle(threadId: string, format: string = "essay"): Promise<string> {
-  const t = await prisma.thread.findUnique({
-    where: { id: threadId },
+  const user = await getCurrentUser();
+  const t = await prisma.thread.findFirst({
+    where: { id: threadId, userId: user.id },
     include: {
       entries: { orderBy: { createdAt: "asc" } },
       challenges: { where: { dismissed: false } },
@@ -208,31 +248,45 @@ function localDateKey(): string {
 
 // Questioner: 手动重新生成今天的头条问题。
 export async function refreshDailyQuestion(): Promise<string> {
+  const user = await getCurrentUser();
   const threads = await prisma.thread.findMany({
-    where: { status: { in: ["seed", "developing"] } },
+    where: { userId: user.id, status: { in: ["seed", "developing"] } },
     orderBy: { updatedAt: "desc" },
     take: 20,
     select: { title: true, claim: true },
   });
-  const signals = await gatherQuestionSignals();
+  const signals = await gatherQuestionSignals(user.id);
   const q = await dailyQuestion(threads.map((t) => ({ title: t.title, claim: t.claim })), signals);
   const date = localDateKey();
-  await prisma.dailyBrief.upsert({ where: { date }, create: { date, question: q }, update: { question: q } });
+  await prisma.dailyBrief.upsert({
+    where: { userId_date: { userId: user.id, date } },
+    create: { date, question: q, userId: user.id },
+    update: { question: q },
+  });
   revalidatePath("/brief");
   return q;
 }
 
 // v3: 为一条(下一条还没推荐的)线程联网找推荐阅读。
 export async function runReading(threadId?: string): Promise<{ count: number; title: string | null }> {
+  const user = await getCurrentUser();
   let t;
   if (threadId) {
-    t = await prisma.thread.findUnique({ where: { id: threadId }, select: { id: true, title: true, claim: true } });
+    t = await prisma.thread.findFirst({
+      where: { id: threadId, userId: user.id },
+      select: { id: true, title: true, claim: true },
+    });
   } else {
     const withR = new Set(
-      (await prisma.reading.findMany({ where: { dismissed: false }, select: { threadId: true } })).map((r) => r.threadId),
+      (
+        await prisma.reading.findMany({
+          where: { dismissed: false, thread: { userId: user.id } },
+          select: { threadId: true },
+        })
+      ).map((r) => r.threadId),
     );
     const threads = await prisma.thread.findMany({
-      where: { status: { not: "archived" } },
+      where: { userId: user.id, status: { not: "archived" } },
       orderBy: { updatedAt: "desc" },
       select: { id: true, title: true, claim: true },
     });
@@ -250,12 +304,18 @@ export async function runReading(threadId?: string): Promise<{ count: number; ti
 }
 
 export async function dismissReading(id: string) {
+  const user = await getCurrentUser();
+  const r = await prisma.reading.findFirst({ where: { id, thread: { userId: user.id } } });
+  if (!r) return;
   await prisma.reading.update({ where: { id }, data: { dismissed: true } });
   revalidatePath("/reading");
 }
 
 export async function dismissChallenge(id: string) {
-  const ch = await prisma.challenge.update({ where: { id }, data: { dismissed: true } });
+  const user = await getCurrentUser();
+  const ch = await prisma.challenge.findFirst({ where: { id, thread: { userId: user.id } } });
+  if (!ch) return;
+  await prisma.challenge.update({ where: { id }, data: { dismissed: true } });
   revalidatePath(`/thread/${ch.threadId}`);
 }
 
@@ -263,8 +323,11 @@ export async function dismissChallenge(id: string) {
 export async function commitDecision(threadId: string, rationale: string) {
   const r = rationale.trim();
   if (!r) return;
+  const user = await getCurrentUser();
+  const t = await prisma.thread.findFirst({ where: { id: threadId, userId: user.id } });
+  if (!t) return;
   await prisma.entry.create({
-    data: { threadId, text: `【决定依据】${r}`, kind: "decision", aiSuggested: false, source: "text" },
+    data: { threadId, text: `【决定依据】${r}`, kind: "decision", aiSuggested: false, source: "text", userId: user.id },
   });
   await prisma.thread.update({ where: { id: threadId }, data: { status: "decided" } });
   revalidatePath(`/thread/${threadId}`);
@@ -273,9 +336,13 @@ export async function commitDecision(threadId: string, rationale: string) {
 
 // 谱系: 演化叙事(語義 diff)を返す。
 export async function explainThreadLineage(threadId: string): Promise<string> {
+  const user = await getCurrentUser();
   const [t, vs] = await Promise.all([
-    prisma.thread.findUnique({ where: { id: threadId }, select: { title: true } }),
-    prisma.claimVersion.findMany({ where: { threadId }, orderBy: { createdAt: "asc" } }),
+    prisma.thread.findFirst({ where: { id: threadId, userId: user.id }, select: { title: true } }),
+    prisma.claimVersion.findMany({
+      where: { threadId, thread: { userId: user.id } },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
   return explainLineage({
     title: t?.title ?? "",
@@ -304,8 +371,9 @@ export async function importText(text: string, split: boolean): Promise<{ count:
 
 // 认知面板: 找出长期主线(反复出现的母题)。
 export async function mainlines(): Promise<{ name: string; why: string; titles: string[] }[]> {
+  const user = await getCurrentUser();
   const threads = await prisma.thread.findMany({
-    where: { status: { not: "archived" } },
+    where: { userId: user.id, status: { not: "archived" } },
     orderBy: { createdAt: "asc" },
     select: { title: true, claim: true },
   });
@@ -319,10 +387,14 @@ export async function mainlines(): Promise<{ name: string; why: string; titles: 
 
 // v4: 认知画像(思维指纹)。
 export async function computeProfile() {
+  const user = await getCurrentUser();
   const HUMAN = ["observation", "judgment", "question", "hypothesis", "decision"];
   const [entries, threads] = await Promise.all([
-    prisma.entry.findMany({ select: { kind: true, createdAt: true, threadId: true } }),
-    prisma.thread.findMany({ include: { entries: { select: { kind: true } }, challenges: { where: { dismissed: false }, select: { id: true } } } }),
+    prisma.entry.findMany({ where: { userId: user.id }, select: { kind: true, createdAt: true, threadId: true } }),
+    prisma.thread.findMany({
+      where: { userId: user.id },
+      include: { entries: { select: { kind: true } }, challenges: { where: { dismissed: false }, select: { id: true } } },
+    }),
   ]);
   const counts: Record<string, number> = {};
   for (const e of entries) counts[e.kind] = (counts[e.kind] ?? 0) + 1;
@@ -355,11 +427,12 @@ export async function computeProfile() {
 // v4 主动越界提醒: 检测一个此刻最值得提的模式,写成一句轻声提醒。
 // 纯规则挑候选(便宜),只对选中的一条调一次 AI 润色。返回 null 表示没啥好说的。
 export async function getNudge(): Promise<{ id: string; text: string; threadId?: string } | null> {
+  const user = await getCurrentUser();
   const now = Date.now(), DAY = 86400000;
   const [entries, threads] = await Promise.all([
-    prisma.entry.findMany({ select: { threadId: true, kind: true, createdAt: true } }),
+    prisma.entry.findMany({ where: { userId: user.id }, select: { threadId: true, kind: true, createdAt: true } }),
     prisma.thread.findMany({
-      where: { status: { in: ["seed", "developing"] } },
+      where: { userId: user.id, status: { in: ["seed", "developing"] } },
       include: {
         entries: { select: { kind: true, createdAt: true } },
         challenges: { where: { dismissed: false }, select: { id: true } },
@@ -417,7 +490,9 @@ export async function getNudge(): Promise<{ id: string; text: string; threadId?:
 
 // v4 思想编年史: 读 claim 版本演变 + 线程生灭,讲成纵向故事。
 export async function computeEvolution() {
+  const user = await getCurrentUser();
   const threads = await prisma.thread.findMany({
+    where: { userId: user.id },
     include: {
       versions: { orderBy: { createdAt: "asc" } },
       entries: { select: { createdAt: true }, orderBy: { createdAt: "desc" }, take: 1 },
@@ -454,7 +529,11 @@ export async function computeEvolution() {
     })
     .map((t) => t.title);
 
-  const firstEntry = await prisma.entry.findFirst({ orderBy: { createdAt: "asc" }, select: { createdAt: true } });
+  const firstEntry = await prisma.entry.findFirst({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+    select: { createdAt: true },
+  });
   const weeks = firstEntry ? Math.max(1, Math.round((now - firstEntry.createdAt.getTime()) / (7 * DAY))) : 1;
   const span = `约 ${weeks} 周,${threads.length} 条思想线`;
 
@@ -463,12 +542,13 @@ export async function computeEvolution() {
 
 // 认知面板: AI 诚实反思(提问 vs 消费)。
 export async function reflect(): Promise<string> {
-  const entries = await prisma.entry.findMany({ select: { kind: true } });
+  const user = await getCurrentUser();
+  const entries = await prisma.entry.findMany({ where: { userId: user.id }, select: { kind: true } });
   const cnt = (k: string) => entries.filter((e) => e.kind === k).length;
   const human =
     cnt("observation") + cnt("judgment") + cnt("question") + cnt("hypothesis") + cnt("decision");
   const threads = await prisma.thread.findMany({
-    where: { claim: { not: null } },
+    where: { userId: user.id, claim: { not: null } },
     include: { entries: { select: { kind: true } } },
   });
   const unchallenged = threads.filter(
@@ -493,11 +573,12 @@ export async function saveReview(a: {
   q4: string;
   q5: string;
 }): Promise<{ count: number }> {
+  const user = await getCurrentUser();
   let count = 0;
   const mk = async (text: string, kind: string) => {
     const t = text.trim();
     if (!t) return;
-    await prisma.entry.create({ data: { text: t, kind, aiSuggested: false, source: "review" } });
+    await prisma.entry.create({ data: { text: t, kind, aiSuggested: false, source: "review", userId: user.id } });
     count++;
   };
   for (const line of a.q1.split("\n")) await mk(line, "observation");
@@ -510,8 +591,9 @@ export async function saveReview(a: {
 
 // 产出: 本周思想回顾(跨所有线程)。
 export async function makeWeekly(): Promise<string> {
+  const user = await getCurrentUser();
   const threads = await prisma.thread.findMany({
-    where: { status: { not: "archived" } },
+    where: { userId: user.id, status: { not: "archived" } },
     orderBy: { updatedAt: "desc" },
     include: { entries: { orderBy: { createdAt: "asc" } } },
   });
@@ -525,9 +607,12 @@ export async function makeWeekly(): Promise<string> {
 }
 
 export async function deleteThread(threadId: string) {
+  const user = await getCurrentUser();
+  const t = await prisma.thread.findFirst({ where: { id: threadId, userId: user.id } });
+  if (!t) return;
   await prisma.entry.updateMany({ where: { threadId }, data: { threadId: null } });
   await prisma.threadLink.deleteMany({
-    where: { OR: [{ aId: threadId }, { bId: threadId }] },
+    where: { userId: user.id, OR: [{ aId: threadId }, { bId: threadId }] },
   });
   await prisma.thread.delete({ where: { id: threadId } });
   redirect("/");
@@ -535,8 +620,9 @@ export async function deleteThread(threadId: string) {
 
 // 跨线程主线を発見して星图に連線を張る。
 export async function discoverThreadLinks(): Promise<{ count: number }> {
+  const user = await getCurrentUser();
   const threads = await prisma.thread.findMany({
-    where: { status: { not: "archived" } },
+    where: { userId: user.id, status: { not: "archived" } },
     orderBy: { createdAt: "asc" },
     select: { id: true, title: true, claim: true },
   });
@@ -551,7 +637,7 @@ export async function discoverThreadLinks(): Promise<{ count: number }> {
     const [aId, bId] = a < b ? [a, b] : [b, a];
     await prisma.threadLink.upsert({
       where: { aId_bId: { aId, bId } },
-      create: { aId, bId, reason: p.reason },
+      create: { aId, bId, reason: p.reason, userId: user.id },
       update: { reason: p.reason },
     });
     count++;
@@ -562,8 +648,9 @@ export async function discoverThreadLinks(): Promise<{ count: number }> {
 
 // Thread → 決策 Memo（Markdown 文字列を返す）。
 export async function makeMemo(threadId: string): Promise<string> {
-  const t = await prisma.thread.findUnique({
-    where: { id: threadId },
+  const user = await getCurrentUser();
+  const t = await prisma.thread.findFirst({
+    where: { id: threadId, userId: user.id },
     include: { entries: { orderBy: { createdAt: "asc" } } },
   });
   if (!t) return "# 未找到该 Thread";
@@ -575,14 +662,15 @@ export async function makeMemo(threadId: string): Promise<string> {
 
 // 全データを JSON でエクスポート（隐私: 完全导出 —— 含谱系/挑战/阅读/连线/简报,不丢任何一张表）。
 export async function exportAll(): Promise<string> {
+  const user = await getCurrentUser();
   const [threads, inbox, versions, challenges, readings, links, briefs] = await Promise.all([
-    prisma.thread.findMany({ include: { entries: { orderBy: { createdAt: "asc" } } }, orderBy: { createdAt: "asc" } }),
-    prisma.entry.findMany({ where: { threadId: null }, orderBy: { createdAt: "asc" } }),
-    prisma.claimVersion.findMany({ orderBy: { createdAt: "asc" } }),
-    prisma.challenge.findMany({ orderBy: { createdAt: "asc" } }),
-    prisma.reading.findMany({ orderBy: { createdAt: "asc" } }),
-    prisma.threadLink.findMany({ orderBy: { createdAt: "asc" } }),
-    prisma.dailyBrief.findMany({ orderBy: { date: "asc" } }),
+    prisma.thread.findMany({ where: { userId: user.id }, include: { entries: { orderBy: { createdAt: "asc" } } }, orderBy: { createdAt: "asc" } }),
+    prisma.entry.findMany({ where: { userId: user.id, threadId: null }, orderBy: { createdAt: "asc" } }),
+    prisma.claimVersion.findMany({ where: { thread: { userId: user.id } }, orderBy: { createdAt: "asc" } }),
+    prisma.challenge.findMany({ where: { thread: { userId: user.id } }, orderBy: { createdAt: "asc" } }),
+    prisma.reading.findMany({ where: { thread: { userId: user.id } }, orderBy: { createdAt: "asc" } }),
+    prisma.threadLink.findMany({ where: { userId: user.id }, orderBy: { createdAt: "asc" } }),
+    prisma.dailyBrief.findMany({ where: { userId: user.id }, orderBy: { date: "asc" } }),
   ]);
   return JSON.stringify(
     { exportedAt: new Date().toISOString(), threads, inbox, versions, challenges, readings, links, briefs },

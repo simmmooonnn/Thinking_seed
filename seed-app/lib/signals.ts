@@ -11,11 +11,11 @@ export interface QuestionSignals {
  * v4 自适应引导: 从用户的认知状态里提取盲区信号,给 dailyQuestion 出题用。
  * — 有判断没证据 / 提了假设没决定 / 线搁置太久 / 最近改了主意。
  */
-export async function gatherQuestionSignals(): Promise<QuestionSignals> {
+export async function gatherQuestionSignals(userId: string): Promise<QuestionSignals> {
   const now = Date.now(), DAY = 86400000;
   const [threads, lastVersion] = await Promise.all([
     prisma.thread.findMany({
-      where: { status: { in: ["seed", "developing"] } },
+      where: { userId, status: { in: ["seed", "developing"] } },
       include: {
         entries: { select: { kind: true } },
         challenges: { where: { dismissed: false }, select: { id: true } },
@@ -24,6 +24,7 @@ export async function gatherQuestionSignals(): Promise<QuestionSignals> {
     }),
     // 最近一次判断翻转: 取最新版本,再取同线程的上一版本作为"改之前"
     prisma.claimVersion.findFirst({
+      where: { thread: { userId } },
       orderBy: { createdAt: "desc" },
       include: {
         thread: {
