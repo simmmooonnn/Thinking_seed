@@ -585,12 +585,12 @@ export async function evolutionStory(input: {
   span: string;
 }): Promise<{
   headline: string;
-  chapters: { title: string; body: string }[];
+  chapters: { title: string; body: string; threads: string[] }[];
   insight: string;
 }> {
   const empty = {
     headline: "你的思想还在积累,时间线会随记录展开。",
-    chapters: [] as { title: string; body: string }[],
+    chapters: [] as { title: string; body: string; threads: string[] }[],
     insight: "",
   };
   const c = client();
@@ -607,7 +607,7 @@ export async function evolutionStory(input: {
       system:
         "你是用户思想的编年史作者。基于事实,写一段【思想编年史】——不是流水账,而是看出脉络:\n" +
         "headline = 一句话点出这段时间他思维的主旋律;\n" +
-        "chapters = 2-4 个小节,每节 {title 小标题, body 2-3 句叙事},讲他坚持了什么、推翻了什么、新长出了什么;\n" +
+        "chapters = 2-4 个小节,每节 {title 小标题, body 2-3 句叙事, threads: 该节主要涉及的思想线名(0-3 个,必须逐字取自给定的线名,没有就给空数组)},讲他坚持了什么、推翻了什么、新长出了什么;\n" +
         "insight = 一句只有纵向看才能发现的洞察(比如某个反复出现的模式、某种正在成形的世界观)。\n" +
         "有温度但不吹捧,像了解他很久的人在替他回望。中文。",
       messages: [
@@ -632,8 +632,12 @@ export async function evolutionStory(input: {
                 type: "array",
                 items: {
                   type: "object",
-                  properties: { title: { type: "string" }, body: { type: "string" } },
-                  required: ["title", "body"],
+                  properties: {
+                    title: { type: "string" },
+                    body: { type: "string" },
+                    threads: { type: "array", items: { type: "string" } },
+                  },
+                  required: ["title", "body", "threads"],
                   additionalProperties: false,
                 },
               },
@@ -650,7 +654,11 @@ export async function evolutionStory(input: {
       const p = JSON.parse(b.text);
       return {
         headline: p.headline || empty.headline,
-        chapters: (p.chapters ?? []).slice(0, 4),
+        chapters: (p.chapters ?? []).slice(0, 4).map((c: { title: string; body: string; threads?: string[] }) => ({
+          title: c.title,
+          body: c.body,
+          threads: (c.threads ?? []).slice(0, 3),
+        })),
         insight: p.insight || "",
       };
     }

@@ -95,10 +95,13 @@ export default async function BriefPage() {
       <div className="grid gap-3 sm:grid-cols-2">
         <Role icon="🎧" name="Listener" accent="#34d399">
           <p>
-            近七日记下 <span className="font-semibold text-grow">{recent.length}</span> 条
-            {inbox > 0 && <> · <span className="text-txt">{inbox}</span> 条待归类</>}。
+            近七日记下 <span className="font-semibold text-grow">{recent.length}</span> 条。
           </p>
-          {inbox > 0 ? <p className="text-muted2">Inbox 里还有散念,归入线程它们才会生长。</p> : <p className="text-muted2">捕获都归好位了。</p>}
+          {inbox > 0 ? (
+            <p className="text-muted2">有些散念还飘着——不急,想安置的时候去星图看看。</p>
+          ) : (
+            <p className="text-muted2">捕获都归好位了。</p>
+          )}
         </Role>
 
         <Role icon="📜" name="Historian" accent="#60a5fa">
@@ -128,8 +131,7 @@ export default async function BriefPage() {
         </Role>
 
         <Role icon="🌱" name="Gardener" accent="#a78bfa">
-          {inbox > 0 && <p>· Inbox {inbox} 条散念待安置。</p>}
-          {veryDormant > 0 && <p>· {veryDormant} 条线程逾十日未动,可归档或重启。</p>}
+          {veryDormant > 0 && <p>· 有几条旧线在沉睡——把一条连到今天的想法,比整理十条更有用。</p>}
           <p>· 去<Link href="/mind" className="text-grow hover:underline">「认知」</Link>看你的长期主线。</p>
         </Role>
       </div>

@@ -1,24 +1,28 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { computeEvolution } from "@/app/actions";
 
 interface Story {
   headline: string;
-  chapters: { title: string; body: string }[];
+  chapters: { title: string; body: string; threads: string[] }[];
   insight: string;
 }
 
 export default function EvolutionCard() {
   const [pending, start] = useTransition();
   const [s, setS] = useState<Story | null>(null);
+  const [t2id, setT2id] = useState<Record<string, string>>({});
   const [err, setErr] = useState(false);
 
   const run = () =>
     start(async () => {
       setErr(false);
       try {
-        setS(await computeEvolution());
+        const r = await computeEvolution();
+        setS(r.story);
+        setT2id(r.titleToId);
       } catch {
         setErr(true);
       }
@@ -55,6 +59,25 @@ export default function EvolutionCard() {
                   <span className="absolute -left-[26px] top-1 h-2.5 w-2.5 rounded-full bg-ai" style={{ boxShadow: "0 0 10px rgba(192,132,252,.7)" }} />
                   <div className="text-sm font-semibold text-txt">{ch.title}</div>
                   <p className="mt-1 text-[13.5px] leading-relaxed text-muted">{ch.body}</p>
+                  {ch.threads.length > 0 && (
+                    <div className="mono mt-1.5 flex flex-wrap gap-1.5 text-[10.5px]">
+                      {ch.threads.map((name, j) =>
+                        t2id[name] ? (
+                          <Link
+                            key={j}
+                            href={`/thread/${t2id[name]}`}
+                            className="rounded border border-ai/40 px-1.5 py-0.5 text-ai hover:bg-ai/10"
+                          >
+                            {name} →
+                          </Link>
+                        ) : (
+                          <span key={j} className="rounded border border-line px-1.5 py-0.5 text-muted2">
+                            {name}
+                          </span>
+                        ),
+                      )}
+                    </div>
+                  )}
                 </li>
               ))}
             </ol>

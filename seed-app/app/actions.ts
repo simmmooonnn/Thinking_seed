@@ -434,15 +434,21 @@ export async function computeProfile() {
     }).length;
   });
 
-  return thinkingProfile({
+  const inbox = entries.filter((e) => !e.threadId).length;
+  const profile = await thinkingProfile({
     authorPct,
     counts,
     unchallenged,
     openHypotheses,
     weeklyOriginal,
-    inbox: entries.filter((e) => !e.threadId).length,
+    inbox,
     topThreads: threads.map((t) => t.title),
   });
+  // 证据链: 画像的结论必须可回溯到这些真实数字(AI 输出只是索引,不是替代品)
+  return {
+    profile,
+    basis: { entries: entries.length, threads: threads.length, authorPct, unchallenged, openHypotheses, inbox },
+  };
 }
 
 // v4 主动越界提醒: 检测一个此刻最值得提的模式,写成一句轻声提醒。
@@ -558,7 +564,11 @@ export async function computeEvolution() {
   const weeks = firstEntry ? Math.max(1, Math.round((now - firstEntry.createdAt.getTime()) / (7 * DAY))) : 1;
   const span = `约 ${weeks} 周,${threads.length} 条思想线`;
 
-  return evolutionStory({ turns, steadfast, emerging, dormant, span });
+  const story = await evolutionStory({ turns, steadfast, emerging, dormant, span });
+  // 证据链: 章节里提到的思想线名 → 线程 id,前端渲染成可跳转的 chip
+  const titleToId: Record<string, string> = {};
+  for (const t of threads) titleToId[t.title] = t.id;
+  return { story, titleToId };
 }
 
 // 认知面板: AI 诚实反思(提问 vs 消费)。

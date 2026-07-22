@@ -10,16 +10,28 @@ interface Profile {
   nudge: string;
 }
 
+interface Basis {
+  entries: number;
+  threads: number;
+  authorPct: number;
+  unchallenged: number;
+  openHypotheses: number;
+  inbox: number;
+}
+
 export default function ProfileCard() {
   const [pending, start] = useTransition();
   const [p, setP] = useState<Profile | null>(null);
+  const [basis, setBasis] = useState<Basis | null>(null);
   const [err, setErr] = useState(false);
 
   const run = () =>
     start(async () => {
       setErr(false);
       try {
-        setP(await computeProfile());
+        const r = await computeProfile();
+        setP(r.profile);
+        setBasis(r.basis);
       } catch {
         setErr(true);
       }
@@ -67,6 +79,13 @@ export default function ProfileCard() {
               <span className="mono mr-2 text-[11px] uppercase tracking-wider text-ai">今天试试</span>
               {p.nudge}
             </div>
+          )}
+          {basis && (
+            <p className="mono border-t border-line/60 pt-2.5 text-[10.5px] leading-relaxed text-muted2">
+              依据:{basis.entries} 条记录 · {basis.threads} 条思想线 · 第一作者 {basis.authorPct}% ·{" "}
+              {basis.unchallenged} 个判断无证据 · {basis.openHypotheses} 个假设未收口 · 收件箱 {basis.inbox} 条
+              —— 画像只是索引,原始记录都在星图里。
+            </p>
           )}
         </div>
       )}
