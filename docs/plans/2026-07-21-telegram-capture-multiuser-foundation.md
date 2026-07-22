@@ -1,6 +1,6 @@
 # Telegram 零摩擦捕获 + 多人数据模型地基 — 实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> 按任务逐个实现,每个任务独立提交;步骤用 checkbox(`- [ ]`)跟踪。
 
 **Goal:** 让作者能在 Telegram 里(文字/语音)零摩擦捕获念头并被每日推送拉回,同时把数据层改造成多人就绪(User + userId 全局隔离 + getCurrentUser 接缝),全程不部署、纯本地。
 
@@ -14,7 +14,7 @@
 - **Next.js 16 有破坏性变更**:改动前读 `seed-app/node_modules/next/dist/docs/` 对应指南。
 - **AI 模型固定 `claude-haiku-4-5`**(最便宜);结构化输出用 `output_config.format.json_schema`。
 - **秘密不入库**:`.env` / `.env.local` / `*.db` 已被根 `.gitignore` 挡住;任何新配置项写进 `.env.local`,绝不硬编码或提交。
-- **提交无 Claude 痕迹**:commit message 不带 `Co-Authored-By`、不带任何 Claude/工具标注;作者身份用本地已配置的 `simmmooonnn <simoon@umich.edu>`。
+- **提交规范**:commit message 简洁、不带任何 trailer;作者身份用本地已配置的 git 身份。
 - **UI/回复文案用中文**,风格与现有一致(简洁、口语)。
 - **不新增重依赖**:只允许 `tsx`、`dotenv`、`vitest`(devDeps)。
 - **bot 目录在 `seed-app/bot/`**,与 app 共享 node_modules / prisma client;bot 内部用**相对路径** import `../lib/*`(不依赖 `@/` 别名,避免 tsx 解析问题)。

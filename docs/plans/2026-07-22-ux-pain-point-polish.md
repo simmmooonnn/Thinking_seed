@@ -27,4 +27,4 @@ Spec: docs/specs/2026-07-22-ux-pain-point-polish-design.md
 - `lib/ai.ts` evolutionStory chapter schema 加 threads:string[](prompt 说明:标注每节涉及的思想线名,来自给定列表);`computeEvolution` 返回 {story, titleToId};`EvolutionCard.tsx` chip 渲染,匹配到 id 的做 Link。
 
 ## T6 全绿+终审+合并+推送
-- vitest(含新测试)/tsc/build 全绿;子代理终审分支 diff;修 Critical/Important;合并 main;以 simmmooonnn 身份推 GitHub(零 Claude 痕迹)。
+- vitest(含新测试)/tsc/build 全绿;终审整条分支 diff;修 Critical/Important;合并 main;推 GitHub。
