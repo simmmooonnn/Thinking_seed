@@ -1,3 +1,4 @@
+import Link from "next/link";
 import ExportButton from "@/app/ui/ExportButton";
 
 export default function SettingsPage() {
@@ -29,13 +30,18 @@ export default function SettingsPage() {
       </section>
 
       <section className="rounded-xl border border-line bg-panel p-4">
-        <div className="mono mb-1 text-xs uppercase tracking-wider text-muted">下一步 (Slice 2+)</div>
-        <ul className="mt-1 space-y-1 text-sm text-muted2">
-          <li>· 候选线程自动关联(pgvector)</li>
-          <li>· Thinking Pre-Commit(决策前的一个关键问题)</li>
-          <li>· 周报 / Founder Update 产出</li>
-          <li>· 思想谱系(版本 + 语义 Diff)</li>
-        </ul>
+        <div className="mono mb-2 text-xs uppercase tracking-wider text-muted">工具箱 · 不常用,但都在</div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/import" className="rounded-lg border border-line bg-panel2 px-3 py-1.5 text-sm text-muted transition hover:border-grow/40 hover:text-txt">
+            📥 导入 · 把 AI 对话/文本拆成种子
+          </Link>
+          <Link href="/outputs" className="rounded-lg border border-line bg-panel2 px-3 py-1.5 text-sm text-muted transition hover:border-grow/40 hover:text-txt">
+            📤 产出汇总 · 周报与回顾
+          </Link>
+          <Link href="/reading" className="rounded-lg border border-line bg-panel2 px-3 py-1.5 text-sm text-muted transition hover:border-grow/40 hover:text-txt">
+            📖 推荐阅读 · 全部列表
+          </Link>
+        </div>
       </section>
     </div>
   );

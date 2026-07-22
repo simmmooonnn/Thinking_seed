@@ -42,12 +42,13 @@ export default async function BriefPage() {
   const now = Date.now();
   const WEEK = 7 * 86400000;
 
-  const [entries, threads, versions, challenges, activeThreads] = await Promise.all([
+  const [entries, threads, versions, challenges, activeThreads, readings] = await Promise.all([
     prisma.entry.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, select: { kind: true, createdAt: true, threadId: true } }),
     prisma.thread.findMany({ where: { userId: user.id }, include: { _count: { select: { entries: true } } } }),
     prisma.claimVersion.findMany({ where: { thread: { userId: user.id } }, orderBy: { createdAt: "desc" }, take: 4, include: { thread: { select: { id: true, title: true } } } }),
     prisma.challenge.findMany({ where: { dismissed: false, thread: { userId: user.id } }, orderBy: { createdAt: "desc" }, take: 3, include: { thread: { select: { id: true, title: true } } } }),
     prisma.thread.findMany({ where: { userId: user.id, status: { in: ["seed", "developing"] } }, orderBy: { updatedAt: "desc" }, take: 20, select: { title: true, claim: true } }),
+    prisma.reading.findMany({ where: { dismissed: false, thread: { userId: user.id } }, orderBy: { createdAt: "desc" }, take: 3, include: { thread: { select: { id: true, title: true } } } }),
   ]);
 
   // 每日缓存: 今天的头条问题只生成一次
@@ -135,6 +136,36 @@ export default async function BriefPage() {
           <p>· 去<Link href="/mind" className="text-grow hover:underline">「认知」</Link>看你的长期主线。</p>
         </Role>
       </div>
+
+      {/* 推荐阅读: "今天该看什么"本来就是简报的一部分 */}
+      {readings.length > 0 && (
+        <section className="rounded-2xl border border-line bg-panel p-5" style={{ borderTop: "2px solid #60a5fa" }}>
+          <div className="mb-2.5 flex items-center gap-2">
+            <span className="text-[15px]">📖</span>
+            <span className="mono text-[11px] uppercase tracking-[0.14em] text-evi">推荐阅读 · 和你的想法有关</span>
+            <Link href="/reading" className="mono ml-auto text-[11px] text-muted2 hover:text-muted">
+              全部 →
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {readings.map((r) => (
+              <div key={r.id} className="text-[13.5px] leading-relaxed">
+                {r.url ? (
+                  <a href={r.url} target="_blank" rel="noreferrer" className="text-txt hover:text-evi hover:underline">
+                    {r.title}
+                  </a>
+                ) : (
+                  <span className="text-txt">{r.title}</span>
+                )}
+                <span className="mono ml-2 text-[11px] text-muted2">
+                  {r.source ? `${r.source} · ` : ""}关联「{r.thread.title}」
+                </span>
+                {r.summary && <p className="mt-0.5 text-[12.5px] text-muted">{r.summary}</p>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <p className="mono pt-2 text-center text-[11px] text-muted2">每天自然更新一次 · 由你自己的思想生成</p>
     </div>

@@ -11,6 +11,7 @@ import ChallengePanel from "@/app/ui/ChallengePanel";
 import LineagePanel from "@/app/ui/LineagePanel";
 import MemoPanel from "@/app/ui/MemoPanel";
 import ArticlePanel from "@/app/ui/ArticlePanel";
+import Collapsible from "@/app/ui/Collapsible";
 
 export const dynamic = "force-dynamic";
 
@@ -79,44 +80,55 @@ export default async function ThreadPage({
         </div>
       </section>
 
-      <PreCommit
-        threadId={thread.id}
-        claim={thread.claim ?? ""}
-        comp={{
-          observation: thread.entries.filter((e) => e.kind === "observation").length,
-          evidence: thread.entries.filter((e) => e.kind === "evidence").length,
-          ai_suggestion: thread.entries.filter((e) => e.kind === "ai_suggestion").length,
-          hypothesis: thread.entries.filter((e) => e.kind === "hypothesis").length,
-          decision: thread.entries.filter((e) => e.kind === "decision").length,
-        }}
-        versions={thread.versions.length}
-        prevClaim={thread.versions.length > 1 ? thread.versions[thread.versions.length - 2].claim : null}
-      />
+      {/* 只展开"此刻有意义的": 空面板收成一行,想用随时点开 */}
+      <Collapsible label="⚡ 提交前检查 · 下结论之前拦你一下" defaultOpen={!!thread.claim}>
+        <PreCommit
+          threadId={thread.id}
+          claim={thread.claim ?? ""}
+          comp={{
+            observation: thread.entries.filter((e) => e.kind === "observation").length,
+            evidence: thread.entries.filter((e) => e.kind === "evidence").length,
+            ai_suggestion: thread.entries.filter((e) => e.kind === "ai_suggestion").length,
+            hypothesis: thread.entries.filter((e) => e.kind === "hypothesis").length,
+            decision: thread.entries.filter((e) => e.kind === "decision").length,
+          }}
+          versions={thread.versions.length}
+          prevClaim={thread.versions.length > 1 ? thread.versions[thread.versions.length - 2].claim : null}
+        />
+      </Collapsible>
 
-      <ChallengePanel
-        threadId={thread.id}
-        cards={thread.challenges.map((c) => ({
-          id: c.id,
-          stance: c.stance,
-          text: c.text,
-          sourceTitle: c.sourceTitle,
-          url: c.url,
-        }))}
-      />
+      <Collapsible label="⚔️ Active Seed · 让 AI 上网找反例/证据" defaultOpen={thread.challenges.length > 0}>
+        <ChallengePanel
+          threadId={thread.id}
+          cards={thread.challenges.map((c) => ({
+            id: c.id,
+            stance: c.stance,
+            text: c.text,
+            sourceTitle: c.sourceTitle,
+            url: c.url,
+          }))}
+        />
+      </Collapsible>
 
-      <LineagePanel
-        threadId={thread.id}
-        versions={thread.versions.map((v) => ({
-          id: v.id,
-          claim: v.claim,
-          reason: v.reason,
-          createdAt: v.createdAt.toISOString(),
-        }))}
-      />
+      <Collapsible label="📜 思想谱系 · 这个判断怎么一路改过来" defaultOpen={thread.versions.length > 0}>
+        <LineagePanel
+          threadId={thread.id}
+          versions={thread.versions.map((v) => ({
+            id: v.id,
+            claim: v.claim,
+            reason: v.reason,
+            createdAt: v.createdAt.toISOString(),
+          }))}
+        />
+      </Collapsible>
 
-      <MemoPanel threadId={thread.id} title={thread.title} />
+      <Collapsible label="📝 产出 · 生成决策 Memo" defaultOpen={false}>
+        <MemoPanel threadId={thread.id} title={thread.title} />
+      </Collapsible>
 
-      <ArticlePanel threadId={thread.id} title={thread.title} />
+      <Collapsible label="✍️ Create · 写成文章 / 演讲提纲 / 推文串" defaultOpen={false}>
+        <ArticlePanel threadId={thread.id} title={thread.title} />
+      </Collapsible>
     </div>
   );
 }

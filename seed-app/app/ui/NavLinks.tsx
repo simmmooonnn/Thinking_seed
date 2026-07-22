@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// 日常只需要三面:星图(记)、简报(读)、认知(想)。
+// 阅读并进简报,产出/导入收进设置的工具箱——都在,只是不占视线。
 const LINKS = [
   { href: "/", label: "星图" },
   { href: "/brief", label: "简报" },
-  { href: "/reading", label: "阅读" },
   { href: "/mind", label: "认知" },
-  { href: "/outputs", label: "产出" },
-  { href: "/import", label: "导入" },
   { href: "/settings", label: "设置" },
 ];
 
