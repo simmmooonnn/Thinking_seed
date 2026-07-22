@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import EntryPopover, { type EntryNode } from "./EntryPopover";
 import { moveEntryToThread } from "@/app/actions";
@@ -126,6 +126,13 @@ export default function Cloud({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, effMode, openThread]);
 
+  // 弹层指向的星被专注模式隐藏时,顺手关掉(避免"弹层挂在看不见的星上")
+  useEffect(() => {
+    if (!selected) return;
+    if (effMode === "focus" && selected.threadId !== openThread) setSelected(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effMode, openThread]);
+
   return (
     <div className="absolute inset-0">
       <div className="pointer-events-none absolute left-0 right-0 top-3 z-20 flex justify-center px-4">
@@ -143,7 +150,8 @@ export default function Cloud({
         filterGroup={filter}
         onThreadFocus={(f) => {
           setFocus(f);
-          setOpenThread(f.rid);
+          // 再点同一颗星 = 收起它的星尘(与 Graph 侧版本谱系的二次点击收起保持对称)
+          setOpenThread((prev) => (prev === f.rid ? null : f.rid));
         }}
         onEntryClick={(n) =>
           setSelected({
@@ -207,8 +215,8 @@ export default function Cloud({
               onClick={() => setViewPref(m)}
               className="rounded-full px-2 py-0.5 transition"
               style={{
-                color: mode === m ? "var(--grow)" : "var(--muted2)",
-                background: mode === m ? "rgba(52,211,153,.12)" : "transparent",
+                color: effMode === m ? "var(--grow)" : "var(--muted2)",
+                background: effMode === m ? "rgba(52,211,153,.12)" : "transparent",
               }}
               title={m === "focus" ? "只显示思想线,点一颗星展开它的星尘(星多时更清晰)" : "显示全部星尘"}
             >

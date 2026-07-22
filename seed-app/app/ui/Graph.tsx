@@ -239,10 +239,17 @@ export default function Graph({
 
   useEffect(() => {
     dataRef.current = data;
-    stickyRef.current = null;
     rebuild();
-    // データ差し替え時は染色を初期状態に戻す(残留フェードを防ぐ)
-    highlight(null);
+    // データ差し替え時: ロック中の星が新データにも居ればハイライトを復元
+    // (専注モードで dust を展開すると data の参照が変わるため、ここで消すと
+    //  クリック直後のハイライトが同じ操作内で失われてしまう)。消えていれば解除。
+    const sticky = stickyRef.current;
+    if (sticky && liveRef.current.nodes.some((n) => n.id === sticky.id)) {
+      highlight(sticky);
+    } else {
+      stickyRef.current = null;
+      highlight(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, rebuild]);
 

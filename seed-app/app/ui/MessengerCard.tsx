@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getNudge } from "@/app/actions";
 import { buildItems, type MsgChallenge, type MsgResurface, type MsgItem, type MsgNudge } from "@/lib/messenger";
@@ -45,6 +45,7 @@ export default function MessengerCard({
   const [items, setItems] = useState<MsgItem[] | null>(null);
   const [i, setI] = useState(0);
   const [show, setShow] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,8 +57,14 @@ export default function MessengerCard({
 
     function assemble(nudge: MsgNudge | null) {
       if (cancelled) return;
+      // 新内容进来时,取消可能悬着的"关闭后清空"定时器,避免它把新内容误清掉
+      if (hideTimer.current) {
+        clearTimeout(hideTimer.current);
+        hideTimer.current = null;
+      }
       const all = buildItems({ challenges, nudge, resurface }).filter((it) => !dismissed.has(it.id));
       setItems(all);
+      setI(0);
       if (all.length > 0) timer = setTimeout(() => !cancelled && setShow(true), 1200);
     }
 
@@ -94,7 +101,7 @@ export default function MessengerCard({
     const dismissed = new Set(cache.dismissed ?? []);
     for (const x of items ?? []) dismissed.add(x.id);
     localStorage.setItem(KEY, JSON.stringify({ ...cache, date: todayKey(), dismissed: [...dismissed] }));
-    setTimeout(() => setItems([]), 700);
+    hideTimer.current = setTimeout(() => setItems([]), 700);
   }
 
   const icon = it.kind === "challenge" ? "⚔️" : it.kind === "nudge" ? "🌱" : "🌙";
