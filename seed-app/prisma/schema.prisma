@@ -35,8 +35,8 @@ model Thread {
   versions   ClaimVersion[]
   challenges Challenge[]
   readings   Reading[]
-  userId     String?
-  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -72,8 +72,8 @@ model DailyBrief {
   id        String   @id @default(cuid())
   date      String // YYYY-MM-DD(本地)
   question  String
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@unique([userId, date])
@@ -85,8 +85,8 @@ model ThreadLink {
   aId       String
   bId       String
   reason    String?
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@unique([aId, bId])
@@ -117,8 +117,8 @@ model Entry {
   source    String   @default("text") // text | voice | image | import
   thread    Thread?  @relation(fields: [threadId], references: [id], onDelete: SetNull)
   threadId  String?
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
