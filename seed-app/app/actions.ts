@@ -456,7 +456,10 @@ export async function computeProfile() {
 type ProfileResult = Awaited<ReturnType<typeof computeProfile>>;
 
 function profileLooksEmpty(r: ProfileResult): boolean {
-  return r.profile.strengths.length === 0 && r.profile.blindspots.length === 0;
+  // 只有两种情况不缓存: 明确的失败兜底(全空,连 nudge 都没有),或确实几乎没数据。
+  // 不能只看 strengths/blindspots——AI 合法输出也可能某项为空,那样会导致"永不缓存、每次都花钱"。
+  const allEmpty = r.profile.strengths.length === 0 && r.profile.blindspots.length === 0 && !r.profile.nudge;
+  return allEmpty || r.basis.entries === 0;
 }
 
 export async function getTodayProfile(): Promise<ProfileResult> {
@@ -465,7 +468,13 @@ export async function getTodayProfile(): Promise<ProfileResult> {
   const hit = await prisma.dailyProfile.findUnique({
     where: { userId_date: { userId: user.id, date } },
   });
-  if (hit) return JSON.parse(hit.json) as ProfileResult;
+  if (hit) {
+    try {
+      return JSON.parse(hit.json) as ProfileResult;
+    } catch {
+      // 脏数据 → 当作未命中,往下重算并用 upsert 覆盖掉这条坏行
+    }
+  }
   const r = await computeProfile();
   if (!profileLooksEmpty(r)) {
     await prisma.dailyProfile.upsert({
