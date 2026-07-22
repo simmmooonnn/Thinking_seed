@@ -29,7 +29,13 @@ const deps: HandlerDeps = {
       : null;
     return { kind: kindMeta(kind).label, threadTitle: title };
   },
-  transcribe: async () => { throw new Error("voice not wired yet"); },
+  transcribe: async (fileId) => {
+    const { getFile, downloadFile } = await import("./telegram");
+    const f = await getFile(token, fileId);
+    const buf = await downloadFile(token, f.file_path);
+    const { transcribe } = await import("../lib/transcribe");
+    return (await transcribe(buf, "voice.ogg")) ?? "";
+  },
   dailyQuestion: async (userId) => {
     const threads = await prisma.thread.findMany({
       where: { userId, status: { in: ["seed", "developing"] } },
